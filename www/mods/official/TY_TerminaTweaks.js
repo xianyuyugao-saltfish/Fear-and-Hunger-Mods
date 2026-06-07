@@ -624,6 +624,213 @@ TY.terminaTweaks = TY.terminaTweaks || {};
         }
     };
 
+  //===============================================================
+  // YSP_VideoPlayer
+  //===============================================================
+
+  // Not sure if this will fix the freezing, but it did fix the audio-video sync issue i ran into over the past few days of testing
+
+  var _vp = ysp.VideoPlayer;
+  var MUTED_BY_DEFAULT = true;
+
+  // Video play queue to prevent interruption errors
+  var videoQueue = {
+    currentPromise: null,
+    pending: [],
+    enqueue: function (fn) {
+      var self = this;
+      return new Promise(function (resolve, reject) {
+        self.pending.push({ fn: fn, resolve: resolve, reject: reject });
+        self.processNext();
+      });
+    },
+    processNext: function () {
+      if (this.pending.length === 0 || this.currentPromise) return;
+      var req = this.pending.shift();
+      this.currentPromise = req
+        .fn()
+        .then(function (result) {
+          req.resolve(result);
+        })
+        .catch(function (err) {
+          req.reject(err);
+        })
+        .finally(function () {
+          videoQueue.currentPromise = null;
+          videoQueue.processNext();
+        });
+    },
+  };
+
+  var _loadVideo = _vp.loadVideo;
+  var _newVideo = _vp.newVideo;
+  var _playVideo = _vp.playVideo;
+  var _playVideoById = _vp.playVideoById;
+  var _stopVideoById = _vp.stopVideoById;
+  var _setLoopById = _vp.setLoopById;
+  var _releaseVideo = _vp.releaseVideo;
+  var _getVideoById = _vp.getVideoById;
+  var _isReady = _vp.isReady;
+  var _getVideoMap = _vp.getVideoMap;
+
+  var getVideoSprite = function (id) {
+    return _getVideoById.call(_vp, id);
+  };
+
+  // Timeupdate texture
+  var bindTextureUpdate = function (sprite) {
+    if (!sprite || !sprite.texture || !sprite.texture.baseTexture) return;
+    var source = sprite.texture.baseTexture.source;
+    if (!source || source._textureUpdateBound) return;
+    source._textureUpdateBound = true;
+    source.addEventListener("timeupdate", function () {
+      if (sprite.texture) {
+        sprite.texture.update();
+      }
+    });
+  };
+
+  // Muted play to bypass autoplay policy
+  var playVideoMuted = function (sprite) {
+    return new Promise(function (resolve, reject) {
+      if (!sprite || !sprite.texture || !sprite.texture.baseTexture) {
+        return reject(new Error("Invalid sprite"));
+      }
+      var video = sprite.texture.baseTexture.source;
+      if (!video) return reject(new Error("No video element"));
+
+      if (MUTED_BY_DEFAULT && !video.muted) {
+        video.muted = true;
+      }
+
+      var playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(function () {
+            resolve();
+          })
+          .catch(function (err) {
+            console.warn("YSP_Video: play() interrupted", err);
+            reject(err);
+          });
+      } else {
+        resolve();
+      }
+    });
+  };
+
+  _vp.loadVideo = function (videoName) {
+    var tex = _loadVideo.call(_vp, videoName);
+    if (tex && tex.baseTexture) {
+      var source = tex.baseTexture.source;
+      source.setAttribute("preload", "auto");
+      if (MUTED_BY_DEFAULT) source.muted = true;
+    }
+    return tex;
+  };
+
+  // Clean old sprite, bind texture update
+  _vp.newVideo = function (videoName, id) {
+    var old = getVideoSprite(id);
+    if (old) {
+      _stopVideoById.call(_vp, id);
+      if (old.texture && old.texture.baseTexture) {
+        var oldVideo = old.texture.baseTexture.source;
+        if (oldVideo) {
+          oldVideo.pause();
+          oldVideo.removeAttribute("src");
+          oldVideo.load();
+        }
+      }
+      if (old.parent) old.parent.removeChild(old);
+    }
+    var sprite = _newVideo.call(_vp, videoName, id);
+    bindTextureUpdate(sprite);
+    return sprite;
+  };
+
+  // Queue
+  _vp.playVideo = function (sprite) {
+    if (!sprite) return;
+    videoQueue
+      .enqueue(function () {
+        return playVideoMuted(sprite);
+      })
+      .catch(function (err) {
+        console.error("YSP_Video: playback failed", err);
+      });
+  };
+
+  _vp.playVideoById = function (id) {
+    var sprite = getVideoSprite(id);
+    if (sprite) {
+      _vp.playVideo(sprite);
+    } else {
+      console.warn('YSP_Video: video id "' + id + '" does not exist');
+    }
+  };
+
+  _vp.stopVideoById = function (id) {
+    var sprite = getVideoSprite(id);
+    if (sprite) {
+      _stopVideoById.call(_vp, id);
+      if (sprite.parent) sprite.parent.removeChild(sprite);
+    }
+  };
+
+  _vp.setLoopById = function (id) {
+    var sprite = getVideoSprite(id);
+    if (sprite) {
+      _setLoopById.call(_vp, id);
+    }
+  };
+
+  // Clean
+  _vp.releaseVideo = function (videoName) {
+    var tex = _loadVideo.call(_vp, videoName);
+    if (tex && tex.baseTexture) {
+      var source = tex.baseTexture.source;
+      if (source) {
+        source.pause();
+        source.removeAttribute("src");
+        source.load();
+      }
+      tex.baseTexture.destroy();
+    }
+    _releaseVideo.call(_vp, videoName);
+  };
+
+  _vp.stopAll = function () {
+    var map = _getVideoMap.call(_vp);
+    for (var id in map) {
+      if (map.hasOwnProperty(id)) {
+        _vp.stopVideoById(id);
+      }
+    }
+  };
+
+  // Fixed isReady to check sprite map
+  _vp.isReady = function () {
+    var map = _getVideoMap.call(_vp);
+    for (var id in map) {
+      var sprite = map[id];
+      if (sprite && sprite.texture && sprite.texture.baseTexture) {
+        if (!sprite.texture.baseTexture.hasLoaded) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  var _SceneManager_goto = SceneManager.goto;
+  SceneManager.goto = function (sceneClass) {
+    if (ysp.VideoPlayer && ysp.VideoPlayer.stopAll) {
+      ysp.VideoPlayer.stopAll();
+    }
+    _SceneManager_goto.call(this, sceneClass);
+  };
+	
 //===============================================================
     // SceneManager
 //===============================================================
