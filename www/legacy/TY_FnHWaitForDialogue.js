@@ -1,5 +1,7 @@
 (function() { 
 
+	// NOTE: Make it so that you don't lose mind/hunger when the Hexen map/system is active.
+
 	//==========================================================
 		// VERSION 2.0.0 -- by Toby Yasha
 	//==========================================================
@@ -33,7 +35,21 @@
 	 * 
 	 * These are named the same in both games, thankfully.
 	 * 
-	 * @type {string[]}
+	 * @typeDef {Object} restrictedMapEvents
+	 * 
+	 * @property {string} [blood | blood2] - 
+	 * Alternatibe bleeding or Nausea debuff(Termina)
+	 * 
+	 * @property {string} [bleeding | bleeding2 | bleeding3] - 
+	 * Applies bleeding damage and the bleeding blood trail on the map
+	 * 
+	 * @property {string} sanity - Lose your sanity in dark or unsafe places.
+	 * [WARNING]: Some events may not properly work or work at all, but those cases
+	 * should be few in numbers.
+	 * 
+	 * @property {string} regain_sanity - Regains sanity in well lit or safe places.
+	 * [WARNING]: Some events may not properly work or work at all, but those cases
+	 * should be few in numbers.
 	 */
 	const restrictedMapEvents = [
 		"blood",
@@ -54,7 +70,13 @@
 	 * 
 	 * This is for Fear and Hunger 1.
 	 * 
-	 * @type {string[]}
+	 * @typeDef {string[]} fnh1RestrictedMapEvents
+	 * 
+	 * @property {string} [hound_TIMER | hound_TIMER2] - The timer used outside 
+	 * the fortress to call the hounds to attack you if you idle too long.
+	 * 
+	 * @property {string} [mahabre_TIMER | mahabre_TIMER2] - The timer used in
+	 * Mahabre when you teleport via the Mahabre book.
 	 */
 	const fnh1RestrictedMapEvents = [
 		...restrictedMapEvents,
@@ -70,7 +92,13 @@
 	 * 
 	 * This is for Fear and Hunger 1.
 	 * 
-	 * @type {string[]}
+	 * @typeDef {string[]} fnh1RestrictedCommonEvents
+	 * 
+	 * @property {string} HUNGER_of_* - 
+	 * Handles the hunger gain of a specific character.
+	 * 
+	 * @property {string} TORCH_TIMER - 
+	 * Handles the luminosity and duration of the torch.
 	 */
 	const fnh1RestrictedCommonEvents = [
 		"HUNGER_of_GIRL",
@@ -86,7 +114,10 @@
 		"HUNGER_of_BABYDEMON",
 		"HUNGER_of_Ghoul1",
 		"HUNGER_of_Ghoul2",
-		"HUNGER_of_Ghoul3"
+		"HUNGER_of_Ghoul3",
+		"TIMER", // probably legarde timer?
+		"TIMER_buckman",
+		"TORCH_TIMER"
 	]
 
 	/**
@@ -95,7 +126,13 @@
 	 * 
 	 * This is for Fear and Hunger 2.
 	 * 
-	 * @type {string[]}
+	 * @typeDef {string[]} fnh2RestrictedCommonEvents
+	 * 
+	 * @property {string} HUNGER_of_* - 
+	 * Handles the hunger gain of a specific character.
+	 * 
+	 * @property {string} RIFLEMAN_ATTENTION! - 
+	 * Handles the rifleman shooting on the riverside map.
 	 */
 	const fnh2RestrictedCommonEvents = [
 		"HUNGER_of_OCCULTIST", // Marina
@@ -103,16 +140,17 @@
 		"HUNGER_of_DOCTOR", // Daan
 		"HUNGER_of_MECHANIC", // Abella
 		"HUNGER_of_YELLOW_PRIEST", // O'saa
-		"HUNGER_of_BLACK_KALEV", // Black Kalev
-		"HUNGER_of_Ghoul1", // Ghoul
-		"HUNGER_of_Ghoul2", // Ghoul
-		"HUNGER_of_Ghoul3", // Ghoul
+		"HUNGER_of_BLACK_KALEV",
+		"HUNGER_of_Ghoul1",
+		"HUNGER_of_Ghoul2",
+		"HUNGER_of_Ghoul3",
 		"HUNGER_of_Thug", // Marcoh
 		"HUNGER_of_Journalist", // Karin
 		"HUNGER_of_Botanist", // Olivia
-		"HUNGER_of_Villager1", // Villager
-		"HUNGER_of_Villager2", // Villager
-		"HUNGER_of_Villager3" // Villager
+		"HUNGER_of_Villager1",
+		"HUNGER_of_Villager2",
+		"HUNGER_of_Villager3",
+		"RIFLEMAN_ATTENTION!"
 	]
 
 	//==========================================================
@@ -123,7 +161,7 @@
 	 * The ids of Game Switches that are found in the page
 	 * conditions of certain Game_Event instance.
 	 * 
-	 * This is used to dynamically retrieve the name of
+	 * NOTE: This is used to dynamically retrieve the name of
 	 * events that do not have a naming convention and
 	 * instead use the default RPG Maker event naming.
 	 * (ex: "EV176")
@@ -135,6 +173,16 @@
 	 * @type {number[]}
 	 */
 	const fnh1RestrictedSwitchIds = [343]; // Yellow Mage Dance
+
+	/**
+	 * The ids of Game Switches that are found in the page
+	 * conditions of certain Game_Event instance.
+	 * 
+	 * This is for Fear and Hunger 2.
+	 * 
+	 * @type {number[]}
+	 */
+	const fnh2RestrictedSwitchIds = [3772]; // Yellow Mage Dance
 
 	//==========================================================
 		// Mod Utility Methods
@@ -177,7 +225,7 @@
 	 * Game Switches based on the Fear and Hunger game.
 	 */
 	function getRestrictedSwitches() {
-		return isGameTermina() ? [] : fnh1RestrictedSwitchIds;
+		return isGameTermina() ? fnh2RestrictedSwitchIds : fnh1RestrictedSwitchIds;
 	}
 
 	/**
@@ -209,7 +257,8 @@
 	 * update cycles delayed after the Map Interpreter is no longer busy.
 	 * 
 	 * NOTE: I am aware that this is technically hardcoded at the moment,
-	 * but unless more events need a delay then this will remain as is.
+	 * but unless events that aren't switch based require a proper integration,
+	 * this will be left as is.
 	 * 
 	 * @see {@link gameEvent} in the "isRestrictedMapEvent" method for more details.
 	 * @returns {boolean} True if the Game_Event interpreter will resume running its
@@ -286,12 +335,12 @@
 	EventHelper.searchForRestrictedSwitches = function(gameEvent) {
 		const switchIds = getRestrictedSwitches();
 
-		if (!switchIds.length) return;
 		if (this.isRestrictedMapEvent(gameEvent)) return;
 
 		for (const id of switchIds) {
 			if (this.checkEventHasSwitchId(gameEvent, id)) {
 				this.addRestrictedMapEvent(gameEvent);
+				gameEvent.refresh();
 			}
 		}
 	}
@@ -337,161 +386,109 @@
 		return this._restrictedMapEvents[mapId] || [];
 	}
 
+	window._EventHelper = EventHelper;
+
 	//==========================================================
-		// InteractionHelper
+		// InterpreterHelper
 	//==========================================================
 
-	function InteractionHelper() {
+	function InterpreterHelper() {
     	throw new Error("This is a static class");
 	}
 
 	/**
-	 * The amount of frames to pause an interpreter instance by
-	 * after the map interpreter is no longer busy.
+	 * The amount of frames to pause the interpreter of 
+	 * a restricted event by after the map interpreter is no longer busy.
 	 * 
-	 * 60 Frames = 1 Second
+	 * NOTE: 60 Frames = 1 Second
 	 * 
 	 * @type {number}
 	 */
-	InteractionHelper.INTERPRETER_DELAY_FRAMES = 120;
+	InterpreterHelper.DELAY_FRAMES = 120;
 
 	/**
 	 * @typedef {Object} EVENT_TYPES
+	 * 
 	 * @property {string} LOCK - Emitter event used to prevent
 	 * restricted events from updating until unlocked. 
+	 * 
 	 * @property {string} UNLOCK - Emitter event used to allow
 	 * restricted events to update after being locked. 
 	 */
-	InteractionHelper.EVENT_TYPES = {
+	InterpreterHelper.EVENT_TYPES = {
 		LOCK: "lock",
 		UNLOCK: "unlock"
 	}
 
 	/**
-	 * @typedef {Object} SYSTEM_TYPES
-	 * @property {string} MESSAGE - Identifier used for the message window system.
-	 * @property {string} MAP_INTERPRETER - Identifier used for the map interpreter system.
-	 */
-	InteractionHelper.SYSTEM_TYPES = {
-		MESSAGE: "messageWindow",
-		MAP_INTERPRETER: "mapInterpreter"
-	}
-
-	/**
-	 * Internal state used to check if the 
-	 * state of all systems has meaningfully changed.
-	 * 
-	 * @type {boolean}
-	 * @private
-	 */
-	InteractionHelper._locked = false;
-
-	/**
-	 * Container for managing the status of systems.
-	 * 
-	 * This is done by locking a system when it starts
-	 * and unlocking it when it finishes operating.
-	 * 
-	 * When a system is locked, it will prevent map events and 
-	 * common events that are considered restricted from updating.  
-	 * 
-	 * True is used if a system is currently locked.
-	 * False is used if a system is currently unlocked.
-	 * 
-	 * @type {Object<string, boolean>}
-	 * @private
-	 */
-	InteractionHelper._systems = {};
-
-	/**
 	 * Event Emitter implementation from PIXI.
 	 * 
-	 * This is the back bone of the whole "InteractionHelper" class.
+	 * This is the back bone of the whole "InterpreterHelper" class.
 	 * Without it we wouldn't be able to send signals to restricted
 	 * events and tell them to lock/unlock when necessary.
 	 * 
 	 * @type {EventEmitter}
 	 */
-	InteractionHelper.eventEmitter = new PIXI.utils.EventEmitter();
+	InterpreterHelper.eventEmitter = new PIXI.utils.EventEmitter();
 
 	/**
-	 * Initializes or resets the existing systems to a default state.
-	 * Also resets the internal state used to track the system state changes. 
-	 */
-	InteractionHelper.resetAllSystems = function() {
-		this._locked = false;
-
-		for (const type of Object.values(this.SYSTEM_TYPES)) {
-			this._systems[type] = false;
-		}
-	}
-
-	/**
-	 * Check if a given system is currently locked or not.
+	 * Internal state used to check if the
+	 * map interpreter is currently busy or not.
 	 * 
-	 * @param {string} type - An entry from the "SYSTEM_TYPES" object.
-	 * @returns {boolean} True if the inspected system is locked.
-	 */
-	InteractionHelper.isSystemLocked = function(type) {
-		return this._systems[type];
-	}
-
-	/**
-	 * Lock a given system if it's not already locked.
-	 * 
-	 * @see {@link type} in the "isSystemLocked" method for more details.
-	 */
-	InteractionHelper.lockSystem = function(type) {
-		if (this.isSystemLocked(type)) return;
-
-		this._systems[type] = true;
-		this._onSystemStateChanged();
-	}
-
-	/**
-	 * Unlock a given system if it's not already unlocked.
-	 * 
-	 * @see {@link type} in the "isSystemLocked" method for more details.
-	 */
-	InteractionHelper.unlockSystem = function(type) {
-		if (!this.isSystemLocked(type)) return;
-
-		this._systems[type] = false;
-		this._onSystemStateChanged();
-	}
-
-	/**
-	 * When a system has changed its state we need to check
-	 * if that state has made any meaningful difference internally.
-	 * 
-	 * If the current state of the combined systems is different
-	 * from the previously saved state, then we can emit a signal
-	 * to the restricted events.
-	 * 
+	 * @type {boolean}
 	 * @private
 	 */
-	InteractionHelper._onSystemStateChanged = function() {
-		const oldState = this._locked;
-		const newState = this.isAnySystemLocked();
+	InterpreterHelper._locked = false;
 
-		if (oldState === newState) return;
-
-		this._locked = newState;
-
-		this.eventEmitter.emit(newState ? 
-			this.EVENT_TYPES.LOCK : 
-			this.EVENT_TYPES.UNLOCK
-		);
+	/**
+	 * Initializes or resets the current state of the
+	 * map interpreter to a default value.
+	 */
+	InterpreterHelper.resetSystem = function() {
+		this._locked = false;
 	}
 
 	/**
-	 * Check any existing system is currently in a locked state.
-	 * 
-	 * @returns {boolean} True if at least 1 system is currently in a locked state.
+	 * NOTE: It is important to clear out all event listeners
+	 * when we leave the map, as we don't want to store any 
+	 * irrelevant listeners.
 	 */
-	InteractionHelper.isAnySystemLocked = function() {
-		return Object.values(this._systems).some(isLocked => isLocked);
+	InterpreterHelper.removeSystemListeners = function() {
+		this.eventEmitter.removeAllListeners();
 	}
+
+	/**
+	 * Mark the map interpreter as busy and send a signal
+	 * to the restricted events to stop updating.
+	 */
+	InterpreterHelper.lockSystem = function() {
+		if (this._locked) return;
+
+		this._locked = true;
+		this.eventEmitter.emit(this.EVENT_TYPES.LOCK);
+	}
+
+	/**
+	 * Mark the map interpreter as free and send a signal
+	 * to the restricted events to resume updating.
+	 */
+	InterpreterHelper.unlockSystem = function() {
+		if (!this._locked) return;
+		
+		this._locked = false;
+		this.eventEmitter.emit(this.EVENT_TYPES.UNLOCK);
+	}
+
+	/**
+	 * Check if the map interpreter is currently busy.
+	 * 
+	 * @returns {boolean} True if the map interpreter is currently in use.
+	 */
+	InterpreterHelper.isSystemLocked = function() {
+		return this._locked;
+	}
+
+	window._InterpreterHelper = InterpreterHelper;
 
 	//==========================================================
 		// Scene_Map 
@@ -499,23 +496,37 @@
 
 	/**
 	 * When the player leaves the map and the Game_Interpreter was running,
-	 * the InteractionHelper might have its last state be the locked one.
+	 * the InterpreterHelper might have its last state be the locked one.
 	 * 
 	 * The issue with that is that every first interaction on a new map
 	 * won't emit the "locked" signal to the restricted events.
 	 * 
 	 * This is a fix for this issue.
+	 * 
+	 * NOTE: This doesn't work if added in "Game_Map.prototype.setup".
 	 */
 	const TY_Scene_Map_onMapLoaded = Scene_Map.prototype.onMapLoaded;
 	Scene_Map.prototype.onMapLoaded = function() {
 	    TY_Scene_Map_onMapLoaded.call(this);
 
-	    InteractionHelper.resetAllSystems();
+	    InterpreterHelper.resetSystem();
 	};
 
 	//==========================================================
 		// Game_Map 
 	//==========================================================
+
+	/**
+	 * Clear out the event listeners from the previous map.
+	 * 
+	 * NOTE: This doesn't work if added in "Scene_Map.prototype.onMapLoaded".
+	 */
+	const TY_Game_Map_setup = Game_Map.prototype.setup;
+	Game_Map.prototype.setup = function(mapId) {
+		InterpreterHelper.removeSystemListeners();
+
+		TY_Game_Map_setup.call(this, mapId);
+	};
 
 	/**
 	 * Call the method for preparing the 
@@ -524,6 +535,7 @@
 	const TY_Game_Map_setupEvents = Game_Map.prototype.setupEvents;
 	Game_Map.prototype.setupEvents = function() {
 		TY_Game_Map_setupEvents.call(this);
+
 	    this.prepareRestrictedSwitches();
 	};
 
@@ -535,6 +547,7 @@
 	    for (const event of this.events()) {
 	    	EventHelper.searchForRestrictedSwitches(event);
 	    }
+	    console.log(`RESTRICTED EVENTS FOR THIS MAP: ${this.mapId()} - ${EventHelper.getRestrictedMapEvents()}`);
 	};
 
 	//==========================================================
@@ -557,7 +570,6 @@
 	 * NOTE: The reason we do this here and not in the 
 	 * "Game_Map.prototype.setupEvents" method is because the
 	 * interpreter is not available until the refresh method is called.
-	 * 
 	 */
 	const TY_Game_Event_refresh = Game_Event.prototype.refresh;
 	Game_Event.prototype.refresh = function() {
@@ -567,6 +579,11 @@
 
 	    if (this._interpreter && isRestrictedMapEvent(this)) {
 	    	this._interpreter.setupRestrictedEventHooks();
+
+	    	/*if (isInterpreterDelayed(this)) {
+	    		this._interpreter.enableDelayedUpdates();
+	    	}*/
+
 	    	this._isRestrictModeReady = true;
 	    }
 	};
@@ -612,83 +629,139 @@
 	};
 
 	//==========================================================
-		// Window_Message 
-	//==========================================================
-
-	/**
-	 * When a message window starts processing text, send a signal to
-	 * lock the system(if its not already locked).
-	 * 
-	 * NOTE: Usually the Map Interpreter locking the system should be enough,
-	 * but in case anything wants to display text and doesn't depend on the 
-	 * Map Interpreter, this is a way to ensure that restricted events are locked.  
-	 */
-	const TY_Window_Message_startMessage = Window_Message.prototype.startMessage;
-	Window_Message.prototype.startMessage = function() {
-		TY_Window_Message_startMessage.call(this);
-
-		const systemType = InteractionHelper.SYSTEM_TYPES.MESSAGE_WINDOW;
-		InteractionHelper.lockSystem(systemType);
-	};
-
-	/**
-	 * When a message window ends processing text, send a signal to
-	 * unlock the system(if its not already unlocked).
-	 * 
-	 * NOTE: The message window can be a bit janky in that it might trigger
-	 * an unlock signal even though the interpreter may want to display more text after.
-	 * 
-	 * Don't depend on this too much to be correct for critical operations.
-	 */
-	const TY_Window_Message_terminateMessage = Window_Message.prototype.terminateMessage;
-	Window_Message.prototype.terminateMessage = function() {
-		TY_Window_Message_terminateMessage.call(this);
-
-		if (!$gameMessage.isBusy()) {
-			console.log("not busy anymore");
-			const systemType = InteractionHelper.SYSTEM_TYPES.MESSAGE_WINDOW;
-			InteractionHelper.unlockSystem(systemType);
-		}
-	};
-
-	//==========================================================
 		// Game_Interpreter 
 	//==========================================================
 
 	/**
+	 * Makes an interpreter instance have its updates 
+	 * locked/unlocked as the map interpreter handles 
+	 * direct or non-direct interactions.
 	 * 
+	 * DIRECT - action button / player touch
+	 * NON-DIRECT - autorun / parallel
 	 */
 	Game_Interpreter.prototype.setupRestrictedEventHooks = function() {
-	//Game_Interpreter.prototype.initRestrictedUpdates = function() {
-
-		console.log(`Interpreter with EVENT ID: ${this._eventId} and 
+		if (this.eventId() === 176) {
+			console.log(`Interpreter with EVENT ID: ${this._eventId} and 
 			COMMON EVENT ID: ${this._commonEventId} got subbed`);
+		}
 
-		InteractionHelper.eventEmitter.on(InteractionHelper.EVENT_TYPES.LOCK, () => {
+		InterpreterHelper.eventEmitter.on(
+			InterpreterHelper.EVENT_TYPES.LOCK, 
+			this.onRestrictedEventLocked.bind(this)
+		);
+
+		InterpreterHelper.eventEmitter.on(
+			InterpreterHelper.EVENT_TYPES.UNLOCK,
+			this.onRestrictedEventUnlocked.bind(this)
+		);	
+	};
+
+	/**
+	 * Enables delayed updates for a restricted event.
+	 * 
+	 * When an event has delayed updates, it won't be allowed to update until the
+	 * delay frame count reaches 0.
+	 * 
+	 * NOTE: Delayed updates can only work for events that are marked as restricted.
+	 */
+	Game_Interpreter.prototype.enableDelayedUpdates = function() {
+		this._delayUpdates = true;
+	}
+
+	/**
+	 * When a restricted event gets locked by the map interpreter, call this method. 
+	 */
+	Game_Interpreter.prototype.onRestrictedEventLocked = function() {
+		if (this.eventId() === 176) {
 			console.log(`Interpreter with EVENT ID: ${this._eventId} and 
 				COMMON EVENT ID: ${this._commonEventId} got locked`);
-			this._updateLocked = true;
-		});
+			console.log(`Delayed Updates Status: ${this._delayUpdates}`);
+		}
 
-		InteractionHelper.eventEmitter.on(InteractionHelper.EVENT_TYPES.UNLOCK, () => {
+		this._updateLocked = true;
+	}
+
+	/**
+	 * When a restricted event gets unlocked by the map interpreter, call this method.
+	 */
+	Game_Interpreter.prototype.onRestrictedEventUnlocked = function() {
+		if (this.eventId() === 176) {
 			console.log(`Interpreter with EVENT ID: ${this._eventId} and 
 				COMMON EVENT ID: ${this._commonEventId} got unlocked`);
-			this._updateLocked = false;
-		});	
+			console.log(`Delayed Updates Status: ${this._delayUpdates}`);
+		}
+
+		this._updateLocked = false;
+		this.startUpdateDelay();
+	}
+
+	/**
+	 * If a restricted event has the "_delayUpdates" flag enabled,
+	 * start the process here.
+	 */
+	Game_Interpreter.prototype.startUpdateDelay = function() {
+		if (this._delayUpdates) {
+			this._delayFrames = InterpreterHelper.DELAY_FRAMES;
+		}
+	}
+
+	/**
+	 * Updates the delay frames for a restricted event.
+	 * 
+	 * @returns {boolean} True if the interpreter is not yet 
+	 * allowed to update its commands.
+	 */
+	Game_Interpreter.prototype.updateDelayFrames = function() {
+		if (this._delayFrames <= 0) return false;
+
+		this._delayFrames--;
+
+		return true;
+	}
+
+	/**
+	 * Define new properties for the Game_Interpreter class.
+	 * 
+	 * NOTE: Properties defined here are meant to stay persistent,
+	 * meaning the interpreter isn't allowed to change their value.
+	 * 
+	 * @property {boolean} _delayUpdates - Internal flag used to check
+	 * if an interpreter must wait a set amount of frames in order to
+	 * resume updating after being unlocked.
+	 * 
+	 * NOTE: Delayed Updates are meant for autorun/parralel events.
+	 */
+	const TY_Game_Interpreter_initialize = Game_Interpreter.prototype.initialize;
+	Game_Interpreter.prototype.initialize = function(depth) {
+		TY_Game_Interpreter_initialize.call(this, depth);
+
+		this._delayUpdates = false;
+		this._updateLocked = false;
+	    this._delayFrames = 0;
 	};
 
 	/**
 	 * Define new properties for the Game_Interpreter class.
+	 * 
+	 * @property {boolean} _updateLocked - Internal flag used to check
+	 * if an interpreter is allowed to be update or not.
+	 * 
+	 * @property {number} _delayFrames - The amount of frames to wait
+	 * before updates can be resumed.
 	 */
 	const TY_Game_Interpreter_clear = Game_Interpreter.prototype.clear;
 	Game_Interpreter.prototype.clear = function() {
+
+		/*if (this.eventId() === 176) {
+			console.log("clear event 176");
+		}*/
+
 		TY_Game_Interpreter_clear.call(this);
 
 		this._commonEventId = 0;
-	    this._updateLocked = false;
-
-	    //this._updatesDelayed = false;
-	    //this._updateDelayInterval = 0;
+	    //this._updateLocked = false;
+	    //this._delayFrames = 0;
 	};
 
 	// for debugging purposes
@@ -704,22 +777,51 @@
 	};
 
 	/**
-	 * 
+	 * When the map interpreter starting operating, lock the updates of
+	 * all map events and common events that have been marked as restricted.
 	 */
 	const TY_Game_Interpreter_setup = Game_Interpreter.prototype.setup;
 	Game_Interpreter.prototype.setup = function(list, eventId) {
 		TY_Game_Interpreter_setup.call(this, list, eventId);
 
+		/*if (this.eventId() === 176) {
+			console.log("setup event 176");
+		}*/
+
 		if (this === $gameMap._interpreter) {
 			console.log(`Called lock on map id ${$gameMap.mapId()}`);
-
-			const systemType = InteractionHelper.SYSTEM_TYPES.MAP_INTERPRETER;
-			InteractionHelper.lockSystem(systemType);
+			InterpreterHelper.lockSystem();
 		}
 	};
 
 	/**
+	 * When the map interpreter starts showing text, lock the updates of
+	 * all map events and common events that have been marked as restricted.
 	 * 
+	 * NOTE: Alternatively the "InterpreterHelper.lockSystem" method could be
+	 * called from "Game_Interpreter.prototype.setup" for more aggresive lock/unlocking.
+	 * 
+	 * But the issue with that is that it sends lock/unlock signals whenever the
+	 * player interacts with anything(ex: player touch) even if the event only
+	 * set like a variable or activated a switch.
+	 * 
+	 * There's also the issue with delayed updates being triggered too often that way.
+	 * But those could be activated from here instead and only ran on unlock if they
+	 * were activated.
+	 */
+	/*const TY_Game_Interpreter_command101 = Game_Interpreter.prototype.command101;
+	Game_Interpreter.prototype.command101 = function() {
+	    if (this === $gameMap._interpreter) {
+			console.log(`Called lock on map id ${$gameMap.mapId()}`);
+			InterpreterHelper.lockSystem();
+		}
+
+	    return TY_Game_Interpreter_command101.call(this);
+	};*/
+
+	/**
+	 * When the map interpreter stops operating, unlock the updates of
+	 * all map events and common events that have been marked as restricted.
 	 */
 	const TY_Game_Interpreter_terminate = Game_Interpreter.prototype.terminate;
 	Game_Interpreter.prototype.terminate = function() {
@@ -727,19 +829,19 @@
 
 	    if (this === $gameMap._interpreter) {
 	    	console.log(`Called unlock on map id ${$gameMap.mapId()}`);
-
-	    	const systemType = InteractionHelper.SYSTEM_TYPES.MAP_INTERPRETER;
-	    	InteractionHelper.unlockSystem(systemType);
+	    	InterpreterHelper.unlockSystem();
 		}
 
 	};
 
 	/**
-	 * 
+	 * Integrates the locked/unlocked updates and delayed updates systems
+	 * into the interpreter's update logic.
 	 */
 	const TY_Game_Interpreter_update = Game_Interpreter.prototype.update;
 	Game_Interpreter.prototype.update = function() {
 		if (this._updateLocked) return;
+		if (this.updateDelayFrames()) return;
 
 		TY_Game_Interpreter_update.call(this);
 	};
@@ -753,7 +855,7 @@
 	const TY_Game_Interpreter_command311 = Game_Interpreter.prototype.command311;
 	Game_Interpreter.prototype.command311 = function() {
 
-		if (!InteractionHelper.isAnySystemLocked()) {
+		if (!InterpreterHelper.isSystemLocked()) {
 			return TY_Game_Interpreter_command311.call(this);
 		}
 
@@ -769,7 +871,7 @@
 	const TY_Game_Interpreter_command312 = Game_Interpreter.prototype.command312;
 	Game_Interpreter.prototype.command312 = function() {
 
-		if (!InteractionHelper.isAnySystemLocked()) {
+		if (!InterpreterHelper.isSystemLocked()) {
 	    	return TY_Game_Interpreter_command312.call(this);
 		}
 
@@ -785,7 +887,7 @@
 	/*const TY_Game_Interpreter_command315 = Game_Interpreter.prototype.command315;
 	Game_Interpreter.prototype.command315 = function() {
 
-		if (!InteractionHelper.isAnySystemLocked()) {
+		if (!InterpreterHelper.isSystemLocked()) {
 	    	return TY_Game_Interpreter_command315.call(this);
 		}
 
@@ -842,12 +944,12 @@
 		return this._defaultBitmapRect;
 	}
 
-	Sprite_HelperPopup.getInterpreterHelperSystemStatus = function() {
-		//const systemStatus = InterpreterHelper.isSystemEnabled();
+	/*Sprite_HelperPopup.getInterpreterHelperSystemStatus = function() {
+		const systemStatus = InterpreterHelper.isSystemEnabled();
 		const systemStatus = true;
 		const statusText = systemStatus ? "Enabled" : "Disabled";
 		return `Interpreter Helper Status: ${statusText}`;
-	}
+	}*/
 
 	Sprite_HelperPopup.getPlayerHungerStatus = function() {
 		return `Player Hunger Updated: ${$gameParty.leader().nextRequiredExp()}`;
@@ -855,7 +957,7 @@
 
 	Sprite_HelperPopup.getTextDisplay = function(displayKey) {
 		const displayEntries = {
-			[this.TEXT_DISPLAY.SYSTEM_STATUS]: this.getInterpreterHelperSystemStatus(),
+			//[this.TEXT_DISPLAY.SYSTEM_STATUS]: this.getInterpreterHelperSystemStatus(),
 			[this.TEXT_DISPLAY.HUNGER_STATUS]: this.getPlayerHungerStatus()
 		}
 
@@ -933,7 +1035,7 @@
 		this.createHungerStatusPopup();
 	};
 
-	Scene_Map.prototype.createSystemStatusPopup = function() {
+	/*Scene_Map.prototype.createSystemStatusPopup = function() {
 		const bitmapRect = Sprite_HelperPopup.getDefaultBitmapRect();
 
 	    this._systemstatusPopup = new Sprite_HelperPopup();
@@ -942,7 +1044,7 @@
 		this._systemstatusPopup.y = bitmapRect.y;
 
 	    this.addChild(this._systemstatusPopup);
-	};
+	};*/
 
 	Scene_Map.prototype.createHungerStatusPopup = function() {
 		const bitmapRect = Sprite_HelperPopup.getDefaultBitmapRect();
@@ -956,9 +1058,9 @@
 	    this.addChild(this._hungerStatusPopup);
 	};
 
-	Scene_Map.prototype.refreshHelperPopupSprites = function() {
+	/*Scene_Map.prototype.refreshHelperPopupSprites = function() {
 	    this._systemstatusPopup.refreshDisplay();
-	};
+	};*/
 
 	const TY_Scene_Map_update = Scene_Map.prototype.update;
 	Scene_Map.prototype.update = function() {
@@ -980,11 +1082,12 @@
 	SceneManager.onKeyDown = function(event) {
 
 		if (!event.ctrlKey && !event.altKey && event.keyCode === 117) { // F6
-			// Teleport to the mines near the Yellow Mage
-			$gamePlayer.reserveTransfer(11, 30, 24, 0, 0);
+			// Teleport to the mines near the Yellow Mage - Fear & Hunger 1
+			$gamePlayer.reserveTransfer(11, 26, 43, 0, 0);
 		}
 
-    	if (!event.ctrlKey && !event.altKey && event.keyCode === 118) { // F7
+		// currently unused
+    	/*if (!event.ctrlKey && !event.altKey && event.keyCode === 118) { // F7
 
     		const systemStatus = InterpreterHelper.isSystemEnabled();
     		InterpreterHelper.setSystemStatus(!systemStatus);
@@ -993,7 +1096,7 @@
     			this._scene.refreshHelperPopupSprites();
     		}
 
-	    }
+	    }*/
 
 		TY_SceneManager_onKeyDown.call(this, event);
 	};
