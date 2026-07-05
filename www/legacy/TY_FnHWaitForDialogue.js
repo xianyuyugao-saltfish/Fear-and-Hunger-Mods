@@ -1,29 +1,35 @@
-(function() { 
+//==========================================================
+	// VERSION 2.0.0 -- by Toby Yasha
+//==========================================================
 
-	// NOTE: Make it so that you don't lose mind/hunger when the Hexen map/system is active.
+/**
+ * [QUICK-SUMMARY]:
+ * 
+ * Stops certain parellel map events and common events 
+ * from running their commands when dialogue is being displayed.
+ * 
+ * This in turn may prevent losing/gaining:
+ * - Body
+ * - Mind
+ * - Hunger
+ * 
+ * The mod may also potentially improve the game's
+ * performance while dialogue is being displayed.
+ * 
+ * [SPECIAL-THANKS]:
+ * 
+ * This mod has been commissioned by s0mthinG.
+ */
 
-	//==========================================================
-		// VERSION 2.0.0 -- by Toby Yasha
-	//==========================================================
+var TY = TY || {};
+TY.fnhWaitForDialogue = TY.fnhWaitForDialogue || {};
 
-	/**
-	 * [QUICK-SUMMARY]:
-	 * 
-	 * Stops certain parellel map events and common events 
-	 * from running their commands when dialogue is being displayed.
-	 * 
-	 * This in turn may prevent losing/gaining:
-	 * - Body
-	 * - Mind
-	 * - Hunger
-	 * 
-	 * The mod may also potentially improve the game's
-	 * performance while dialogue is being displayed.
-	 * 
-	 * [SPECIAL-THANKS]:
-	 * 
-	 * This mod has been commissioned by s0mthinG.
-	 */
+var Imported = Imported || {};
+Imported.TY_FnHWaitForDialogue = true;
+
+// NOTE: Make it so that you don't lose mind/hunger when the Hexen map/system is active.
+
+(function(_) { 
 
 	//==========================================================
 		// Mod Parameters 
@@ -35,10 +41,10 @@
 	 * 
 	 * These are named the same in both games, thankfully.
 	 * 
-	 * @typeDef {Object} restrictedMapEvents
+	 * @typeDef {string[]} restrictedMapEvents
 	 * 
 	 * @property {string} [blood | blood2] - 
-	 * Alternatibe bleeding or Nausea debuff(Termina)
+	 * Alternative bleeding or Nausea debuff(Termina)
 	 * 
 	 * @property {string} [bleeding | bleeding2 | bleeding3] - 
 	 * Applies bleeding damage and the bleeding blood trail on the map
@@ -389,144 +395,8 @@
 	window._EventHelper = EventHelper;
 
 	//==========================================================
-		// InterpreterHelper
-	//==========================================================
-
-	function InterpreterHelper() {
-    	throw new Error("This is a static class");
-	}
-
-	/**
-	 * The amount of frames to pause the interpreter of 
-	 * a restricted event by after the map interpreter is no longer busy.
-	 * 
-	 * NOTE: 60 Frames = 1 Second
-	 * 
-	 * @type {number}
-	 */
-	InterpreterHelper.DELAY_FRAMES = 120;
-
-	/**
-	 * @typedef {Object} EVENT_TYPES
-	 * 
-	 * @property {string} LOCK - Emitter event used to prevent
-	 * restricted events from updating until unlocked. 
-	 * 
-	 * @property {string} UNLOCK - Emitter event used to allow
-	 * restricted events to update after being locked. 
-	 */
-	InterpreterHelper.EVENT_TYPES = {
-		LOCK: "lock",
-		UNLOCK: "unlock"
-	}
-
-	/**
-	 * Event Emitter implementation from PIXI.
-	 * 
-	 * This is the back bone of the whole "InterpreterHelper" class.
-	 * Without it we wouldn't be able to send signals to restricted
-	 * events and tell them to lock/unlock when necessary.
-	 * 
-	 * @type {EventEmitter}
-	 */
-	InterpreterHelper.eventEmitter = new PIXI.utils.EventEmitter();
-
-	/**
-	 * Internal state used to check if the
-	 * map interpreter is currently busy or not.
-	 * 
-	 * @type {boolean}
-	 * @private
-	 */
-	InterpreterHelper._locked = false;
-
-	/**
-	 * Initializes or resets the current state of the
-	 * map interpreter to a default value.
-	 */
-	InterpreterHelper.resetSystem = function() {
-		this._locked = false;
-	}
-
-	/**
-	 * NOTE: It is important to clear out all event listeners
-	 * when we leave the map, as we don't want to store any 
-	 * irrelevant listeners.
-	 */
-	InterpreterHelper.removeSystemListeners = function() {
-		this.eventEmitter.removeAllListeners();
-	}
-
-	/**
-	 * Mark the map interpreter as busy and send a signal
-	 * to the restricted events to stop updating.
-	 */
-	InterpreterHelper.lockSystem = function() {
-		if (this._locked) return;
-
-		this._locked = true;
-		this.eventEmitter.emit(this.EVENT_TYPES.LOCK);
-	}
-
-	/**
-	 * Mark the map interpreter as free and send a signal
-	 * to the restricted events to resume updating.
-	 */
-	InterpreterHelper.unlockSystem = function() {
-		if (!this._locked) return;
-		
-		this._locked = false;
-		this.eventEmitter.emit(this.EVENT_TYPES.UNLOCK);
-	}
-
-	/**
-	 * Check if the map interpreter is currently busy.
-	 * 
-	 * @returns {boolean} True if the map interpreter is currently in use.
-	 */
-	InterpreterHelper.isSystemLocked = function() {
-		return this._locked;
-	}
-
-	window._InterpreterHelper = InterpreterHelper;
-
-	//==========================================================
-		// Scene_Map 
-	//==========================================================
-
-	/**
-	 * When the player leaves the map and the Game_Interpreter was running,
-	 * the InterpreterHelper might have its last state be the locked one.
-	 * 
-	 * The issue with that is that every first interaction on a new map
-	 * won't emit the "locked" signal to the restricted events.
-	 * 
-	 * This is a fix for this issue.
-	 * 
-	 * NOTE: This doesn't work if added in "Game_Map.prototype.setup".
-	 */
-	const TY_Scene_Map_onMapLoaded = Scene_Map.prototype.onMapLoaded;
-	Scene_Map.prototype.onMapLoaded = function() {
-	    TY_Scene_Map_onMapLoaded.call(this);
-
-	    InterpreterHelper.resetSystem();
-	};
-
-	//==========================================================
 		// Game_Map 
 	//==========================================================
-
-	/**
-	 * Clear out the event listeners from the previous map.
-	 * 
-	 * NOTE: This doesn't work if added in "Scene_Map.prototype.onMapLoaded".
-	 */
-	const TY_Game_Map_setup = Game_Map.prototype.setup;
-	Game_Map.prototype.setup = function(mapId) {
-		InterpreterHelper.removeSystemListeners();
-
-		TY_Game_Map_setup.call(this, mapId);
-	};
 
 	/**
 	 * Call the method for preparing the 
@@ -547,199 +417,35 @@
 	    for (const event of this.events()) {
 	    	EventHelper.searchForRestrictedSwitches(event);
 	    }
-	    console.log(`RESTRICTED EVENTS FOR THIS MAP: ${this.mapId()} - ${EventHelper.getRestrictedMapEvents()}`);
-	};
-
-	//==========================================================
-		// Game_Event
-	//==========================================================
-
-	/**
-	 * Internal flag that is used to check if 
-	 * a restricted event has been initialized.
-	 * 
-	 * @type {boolean}
-	 * @private
-	 */
-	Game_Event.prototype._isRestrictModeReady = false;
-
-	/**
-	 * Ensure that the interpreter exists before
-	 * putting restriction on the updates of a parallel map events.
-	 * 
-	 * NOTE: The reason we do this here and not in the 
-	 * "Game_Map.prototype.setupEvents" method is because the
-	 * interpreter is not available until the refresh method is called.
-	 */
-	const TY_Game_Event_refresh = Game_Event.prototype.refresh;
-	Game_Event.prototype.refresh = function() {
-	    TY_Game_Event_refresh.call(this);
-
-	    if (this._isRestrictModeReady) return;
-
-	    if (this._interpreter && isRestrictedMapEvent(this)) {
-	    	this._interpreter.setupRestrictedEventHooks();
-
-	    	/*if (isInterpreterDelayed(this)) {
-	    		this._interpreter.enableDelayedUpdates();
-	    	}*/
-
-	    	this._isRestrictModeReady = true;
-	    }
 	};
 
 	//==========================================================
 		// Game_CommonEvent 
 	//==========================================================
 
-	/**
-	 * Internal flag that is used to check if 
-	 * a restricted common event has been initialized.
-	 * 
-	 * @type {boolean}
-	 * @private
-	 */
-	Game_CommonEvent.prototype._isRestrictModeReady = false;
+	/*Game_CommonEvent.prototype.update = function() {
 
-	/**
-	 * Ensure that the interpreter exists before
-	 * putting restriction on the updates of a parallel common events.
-	 * 
-	 * NOTE: Unlike Game_Event, Game_CommonEvent need to have all conditions
-	 * from "isActive" met before the interpreter is created.
-	 * 
-	 * So simply refreshing the Game_Map might not active them
-	 * (because of the switch condition).
-	 */
-	const TY_Game_CommonEvent_refresh = Game_CommonEvent.prototype.refresh;
-	Game_CommonEvent.prototype.refresh = function() {
-	    TY_Game_CommonEvent_refresh.call(this);
+	};*/
 
-	    // for debug purposes
-	    if (this._interpreter && this._interpreter._commonEventId === 0) {
-	    	this._interpreter._commonEventId = this._commonEventId;
-	    }
+	//==========================================================
+		// Game_Event 
+	//==========================================================
 
-	    if (this._isRestrictModeReady) return;
+	/*Game_Event.prototype.updateParallel = function() {
 
-	    if (this._interpreter && isRestrictedCommonEvent(this)) {
-			this._interpreter.setupRestrictedEventHooks();
-			this._isRestrictModeReady = true;
-	    }
-	};
+	};*/
 
 	//==========================================================
 		// Game_Interpreter 
 	//==========================================================
 
-	/**
-	 * Makes an interpreter instance have its updates 
-	 * locked/unlocked as the map interpreter handles 
-	 * direct or non-direct interactions.
-	 * 
-	 * DIRECT - action button / player touch
-	 * NON-DIRECT - autorun / parallel
-	 */
-	Game_Interpreter.prototype.setupRestrictedEventHooks = function() {
-		if (this.eventId() === 176) {
-			console.log(`Interpreter with EVENT ID: ${this._eventId} and 
-			COMMON EVENT ID: ${this._commonEventId} got subbed`);
-		}
-
-		InterpreterHelper.eventEmitter.on(
-			InterpreterHelper.EVENT_TYPES.LOCK, 
-			this.onRestrictedEventLocked.bind(this)
-		);
-
-		InterpreterHelper.eventEmitter.on(
-			InterpreterHelper.EVENT_TYPES.UNLOCK,
-			this.onRestrictedEventUnlocked.bind(this)
-		);	
-	};
-
-	/**
-	 * Enables delayed updates for a restricted event.
-	 * 
-	 * When an event has delayed updates, it won't be allowed to update until the
-	 * delay frame count reaches 0.
-	 * 
-	 * NOTE: Delayed updates can only work for events that are marked as restricted.
-	 */
-	Game_Interpreter.prototype.enableDelayedUpdates = function() {
-		this._delayUpdates = true;
-	}
-
-	/**
-	 * When a restricted event gets locked by the map interpreter, call this method. 
-	 */
-	Game_Interpreter.prototype.onRestrictedEventLocked = function() {
-		if (this.eventId() === 176) {
-			console.log(`Interpreter with EVENT ID: ${this._eventId} and 
-				COMMON EVENT ID: ${this._commonEventId} got locked`);
-			console.log(`Delayed Updates Status: ${this._delayUpdates}`);
-		}
-
-		this._updateLocked = true;
-	}
-
-	/**
-	 * When a restricted event gets unlocked by the map interpreter, call this method.
-	 */
-	Game_Interpreter.prototype.onRestrictedEventUnlocked = function() {
-		if (this.eventId() === 176) {
-			console.log(`Interpreter with EVENT ID: ${this._eventId} and 
-				COMMON EVENT ID: ${this._commonEventId} got unlocked`);
-			console.log(`Delayed Updates Status: ${this._delayUpdates}`);
-		}
-
-		this._updateLocked = false;
-		this.startUpdateDelay();
-	}
-
-	/**
-	 * If a restricted event has the "_delayUpdates" flag enabled,
-	 * start the process here.
-	 */
-	Game_Interpreter.prototype.startUpdateDelay = function() {
-		if (this._delayUpdates) {
-			this._delayFrames = InterpreterHelper.DELAY_FRAMES;
-		}
-	}
-
-	/**
-	 * Updates the delay frames for a restricted event.
-	 * 
-	 * @returns {boolean} True if the interpreter is not yet 
-	 * allowed to update its commands.
-	 */
-	Game_Interpreter.prototype.updateDelayFrames = function() {
-		if (this._delayFrames <= 0) return false;
-
-		this._delayFrames--;
-
-		return true;
-	}
-
-	/**
-	 * Define new properties for the Game_Interpreter class.
-	 * 
-	 * NOTE: Properties defined here are meant to stay persistent,
-	 * meaning the interpreter isn't allowed to change their value.
-	 * 
-	 * @property {boolean} _delayUpdates - Internal flag used to check
-	 * if an interpreter must wait a set amount of frames in order to
-	 * resume updating after being unlocked.
-	 * 
-	 * NOTE: Delayed Updates are meant for autorun/parralel events.
-	 */
-	const TY_Game_Interpreter_initialize = Game_Interpreter.prototype.initialize;
-	Game_Interpreter.prototype.initialize = function(depth) {
-		TY_Game_Interpreter_initialize.call(this, depth);
-
-		this._delayUpdates = false;
-		this._updateLocked = false;
-	    this._delayFrames = 0;
-	};
+	/*Game_Interpreter.prototype.setup = function(list, eventId) {
+	    this.clear();
+	    this._mapId = $gameMap.mapId();
+	    this._eventId = eventId || 0;
+	    this._list = list;
+	    Game_Interpreter.requestImages(list);
+	};*/
 
 	/**
 	 * Define new properties for the Game_Interpreter class.
@@ -752,19 +458,11 @@
 	 */
 	const TY_Game_Interpreter_clear = Game_Interpreter.prototype.clear;
 	Game_Interpreter.prototype.clear = function() {
-
-		/*if (this.eventId() === 176) {
-			console.log("clear event 176");
-		}*/
-
 		TY_Game_Interpreter_clear.call(this);
 
 		this._commonEventId = 0;
-	    //this._updateLocked = false;
-	    //this._delayFrames = 0;
 	};
 
-	// for debugging purposes
 	const TY_Game_Interpreter_setupReservedCommonEvent = 
 		Game_Interpreter.prototype.setupReservedCommonEvent;
 	Game_Interpreter.prototype.setupReservedCommonEvent = function() {
@@ -777,76 +475,6 @@
 	};
 
 	/**
-	 * When the map interpreter starting operating, lock the updates of
-	 * all map events and common events that have been marked as restricted.
-	 */
-	const TY_Game_Interpreter_setup = Game_Interpreter.prototype.setup;
-	Game_Interpreter.prototype.setup = function(list, eventId) {
-		TY_Game_Interpreter_setup.call(this, list, eventId);
-
-		/*if (this.eventId() === 176) {
-			console.log("setup event 176");
-		}*/
-
-		if (this === $gameMap._interpreter) {
-			console.log(`Called lock on map id ${$gameMap.mapId()}`);
-			InterpreterHelper.lockSystem();
-		}
-	};
-
-	/**
-	 * When the map interpreter starts showing text, lock the updates of
-	 * all map events and common events that have been marked as restricted.
-	 * 
-	 * NOTE: Alternatively the "InterpreterHelper.lockSystem" method could be
-	 * called from "Game_Interpreter.prototype.setup" for more aggresive lock/unlocking.
-	 * 
-	 * But the issue with that is that it sends lock/unlock signals whenever the
-	 * player interacts with anything(ex: player touch) even if the event only
-	 * set like a variable or activated a switch.
-	 * 
-	 * There's also the issue with delayed updates being triggered too often that way.
-	 * But those could be activated from here instead and only ran on unlock if they
-	 * were activated.
-	 */
-	/*const TY_Game_Interpreter_command101 = Game_Interpreter.prototype.command101;
-	Game_Interpreter.prototype.command101 = function() {
-	    if (this === $gameMap._interpreter) {
-			console.log(`Called lock on map id ${$gameMap.mapId()}`);
-			InterpreterHelper.lockSystem();
-		}
-
-	    return TY_Game_Interpreter_command101.call(this);
-	};*/
-
-	/**
-	 * When the map interpreter stops operating, unlock the updates of
-	 * all map events and common events that have been marked as restricted.
-	 */
-	const TY_Game_Interpreter_terminate = Game_Interpreter.prototype.terminate;
-	Game_Interpreter.prototype.terminate = function() {
-		TY_Game_Interpreter_terminate.call(this);
-
-	    if (this === $gameMap._interpreter) {
-	    	console.log(`Called unlock on map id ${$gameMap.mapId()}`);
-	    	InterpreterHelper.unlockSystem();
-		}
-
-	};
-
-	/**
-	 * Integrates the locked/unlocked updates and delayed updates systems
-	 * into the interpreter's update logic.
-	 */
-	const TY_Game_Interpreter_update = Game_Interpreter.prototype.update;
-	Game_Interpreter.prototype.update = function() {
-		if (this._updateLocked) return;
-		if (this.updateDelayFrames()) return;
-
-		TY_Game_Interpreter_update.call(this);
-	};
-
-	/**
 	 * Check if an interpreter instance is allowed to change an actor's hp(body).
 	 * 
 	 * NOTE: This is a fallback in case a restricted event does not conform to
@@ -855,9 +483,9 @@
 	const TY_Game_Interpreter_command311 = Game_Interpreter.prototype.command311;
 	Game_Interpreter.prototype.command311 = function() {
 
-		if (!InterpreterHelper.isSystemLocked()) {
+		//if (!InterpreterHelper.isSystemLocked()) {
 			return TY_Game_Interpreter_command311.call(this);
-		}
+		//}
 
 	    return true;
 	};
@@ -871,9 +499,9 @@
 	const TY_Game_Interpreter_command312 = Game_Interpreter.prototype.command312;
 	Game_Interpreter.prototype.command312 = function() {
 
-		if (!InterpreterHelper.isSystemLocked()) {
+		//if (!InterpreterHelper.isSystemLocked()) {
 	    	return TY_Game_Interpreter_command312.call(this);
-		}
+		//}
 
 		return true;
 	};
@@ -884,15 +512,15 @@
 	 * NOTE: This is a fallback in case a restricted event does not conform to
 	 * the naming conventions established in the "Mod Parameters" section of the mod.
 	 */
-	/*const TY_Game_Interpreter_command315 = Game_Interpreter.prototype.command315;
+	const TY_Game_Interpreter_command315 = Game_Interpreter.prototype.command315;
 	Game_Interpreter.prototype.command315 = function() {
 
-		if (!InterpreterHelper.isSystemLocked()) {
+		//if (!InterpreterHelper.isSystemLocked()) {
 	    	return TY_Game_Interpreter_command315.call(this);
-		}
+		//}
 
 	    return true;
-	};*/
+	};
 
 	//==========================================================
 		// Sprite_HelperPopup
@@ -1075,34 +703,42 @@
 	};
 
 	//==========================================================
-		// SceneManager 
-	//==========================================================
-
-	const TY_SceneManager_onKeyDown = SceneManager.onKeyDown;
-	SceneManager.onKeyDown = function(event) {
-
-		if (!event.ctrlKey && !event.altKey && event.keyCode === 117) { // F6
-			// Teleport to the mines near the Yellow Mage - Fear & Hunger 1
-			$gamePlayer.reserveTransfer(11, 26, 43, 0, 0);
-		}
-
-		// currently unused
-    	/*if (!event.ctrlKey && !event.altKey && event.keyCode === 118) { // F7
-
-    		const systemStatus = InterpreterHelper.isSystemEnabled();
-    		InterpreterHelper.setSystemStatus(!systemStatus);
-
-    		if (this._scene instanceof Scene_Map) {
-    			this._scene.refreshHelperPopupSprites();
-    		}
-
-	    }*/
-
-		TY_SceneManager_onKeyDown.call(this, event);
-	};
-
-	//==========================================================
 		// End of File
 	//==========================================================
 
-})();
+	window._messageStarted = false;
+	window._messageTimer = 0;
+	window._MESSAGE_TIMER_VALUE = 60;
+
+	const _Window_Message_update = Window_Message.prototype.update;
+	Window_Message.prototype.update = function() {
+		_Window_Message_update.call(this);
+
+		if (window._messageStarted && window._messageTimer > 0 && this.isClosed()) {
+			window._messageTimer--;
+
+			if (window._messageTimer <= 0) {
+				window._messageStarted = false;
+				console.log("no new message started");
+			}
+		}
+	};
+
+	const _Window_Message_startMessage = Window_Message.prototype.startMessage;
+	Window_Message.prototype.startMessage = function() {
+	    _Window_Message_startMessage.call(this);
+	    
+	    window._messageStarted = true;
+	    console.log("message started");
+	};
+
+
+	const _Window_Message_terminateMessage = Window_Message.prototype.terminateMessage;
+	Window_Message.prototype.terminateMessage = function() {
+		_Window_Message_terminateMessage.call(this);
+
+		window._messageTimer = window._MESSAGE_TIMER_VALUE;
+		console.log("message ended");
+	};
+
+})(TY.fnhWaitForDialogue);
