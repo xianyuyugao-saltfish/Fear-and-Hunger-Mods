@@ -172,8 +172,6 @@ Imported.TY_FnHWaitForDialogue = true;
 	 * instead use the default RPG Maker event naming.
 	 * (ex: "EV176")
 	 * 
-	 * (See "EventHelper" class for use case)
-	 * 
 	 * This is for Fear and Hunger 1.
 	 * 
 	 * @type {number[]}
@@ -210,8 +208,7 @@ Imported.TY_FnHWaitForDialogue = true;
 	 * Parallel Map Events based on the Fear and Hunger game.
 	 */
 	function getRestrictedMapEvents() {
-		const eventNames = isGameTermina() ? restrictedMapEvents : fnh1RestrictedMapEvents;
-		return eventNames.concat(EventHelper.getRestrictedMapEvents());
+		return isGameTermina() ? restrictedMapEvents : fnh1RestrictedMapEvents;
 	}
 
 	/**
@@ -234,245 +231,72 @@ Imported.TY_FnHWaitForDialogue = true;
 		return isGameTermina() ? fnh2RestrictedSwitchIds : fnh1RestrictedSwitchIds;
 	}
 
-	/**
-	 * Check if a Game_Event should be treated as a restricted event.
-	 * 
-	 * @param {Game_Event} gameEvent - The Game_Event instance to verify.
-	 * @returns {boolean} True if the Game_Event is going to be a restricted event.
-	 */
-	function isRestrictedMapEvent(gameEvent) {
-		const eventNames = getRestrictedMapEvents();
-		const eventData = gameEvent.event();
-		return eventNames.includes(eventData.name);
-	}
-
-	/**
-	 * Check if a Game_CommonEvent should be treated as a restricted event.
-	 * 
-	 * @param {Game_CommonEvent} gameEvent - The Game_CommonEvent instance to verify.
-	 * @returns {boolean} True if the Game_CommonEvent is going to be a restricted event. 
-	 */
-	function isRestrictedCommonEvent(commonEvent) {
-		const commonEventNames = getRestrictedCommonEvents();
-		const commonEventData = commonEvent.event();
-		return commonEventNames.includes(commonEventData.name);
-	}
-
-	/**
-	 * Check if the Interpreter of a Game_Event needs to have their 
-	 * update cycles delayed after the Map Interpreter is no longer busy.
-	 * 
-	 * NOTE: I am aware that this is technically hardcoded at the moment,
-	 * but unless events that aren't switch based require a proper integration,
-	 * this will be left as is.
-	 * 
-	 * @see {@link gameEvent} in the "isRestrictedMapEvent" method for more details.
-	 * @returns {boolean} True if the Game_Event interpreter will resume running its
-	 * commands after a certain delay interval.
-	 */
-	function isInterpreterDelayed(gameEvent) {
-		const eventNames = EventHelper.getRestrictedMapEvents();
-		const eventData = gameEvent.event();
-		return eventNames.includes(eventData.name); 
- 	}
-
-	//==========================================================
-		// EventHelper
-	//==========================================================
-
-	function EventHelper() {
-		throw new Error("This is a static class");
-	}
-
-	/**
-	 * A container for restricted Parallel Map Events.
-	 * This is used to store/retrieve event names based on a given map id.
-	 * 
-	 * @type {Object<{ mapId: string[] }>}
-	 * @private
-	 */
-	EventHelper._restrictedMapEvents = {};
-
-	/**
-	 * Check if the page conditions of a Game_Event instance uses a given 
-	 * restricted switch id as a condition and that switch must be ON.
-	 * 
-	 * @param {Object} page - The page object of a Game_Event instance.
-	 * @param {number} targetSwitchId - The restricted switch id to look for.
-	 * 
-	 * @returns {boolean} True if the current page of a 
-	 * Game_Event uses a restricted switch id.
-	 */
-	EventHelper.checkPageHasSwitchId = function(page, targetSwitchId) {
-		const c = page.conditions;
-		return (
-			(c.switch1Id === targetSwitchId && c.switch1Valid) ||
-			(c.switch2Id === targetSwitchId && c.switch2Valid)
-		)
-	}
-
-	/**
-	 * Check if a Game_Event instance uses a given restricted switch id in
-	 * any of their page conditions.
-	 * 
-	 * @param {Game_Event} gameEvent - The Game_Event instance to inspect.
-	 * @see {@link targetSwitchId} in the "checkPageHasSwitchId" method for more details.
-	 * 
-	 * @returns {boolean} True if any of the Game_Event's 
-	 * page conditions use a restricted switch id.
-	 */
-	EventHelper.checkEventHasSwitchId = function(gameEvent, targetSwitchId) {
-		const eventData = gameEvent.event();
-		return eventData.pages.some(page => 
-			this.checkPageHasSwitchId(page, targetSwitchId)
-		);
-	}
-
-	/**
-	 * Search a Game_Event instance from the current Game_Map to
-	 * see if it uses any restricted switch ids.
-	 * 
-	 * If the Game_Event uses any restricted switch ids, it will
-	 * be stored and referenced any time the current Game_Map is
-	 * loaded into the game.
-	 * 
-	 * @see {@link gameEvent} in the "checkEventHasSwitchId" method for more details.
-	 */
-	EventHelper.searchForRestrictedSwitches = function(gameEvent) {
-		const switchIds = getRestrictedSwitches();
-
-		if (this.isRestrictedMapEvent(gameEvent)) return;
-
-		for (const id of switchIds) {
-			if (this.checkEventHasSwitchId(gameEvent, id)) {
-				this.addRestrictedMapEvent(gameEvent);
-				gameEvent.refresh();
-			}
-		}
-	}
-
-	/**
-	 * Store the name of a Game_Event instance into the container for
-	 * restricted map events based on the current Game_Map map id.
-	 * 
-	 * @see {@link gameEvent} in the "checkEventHasSwitchId" method for more details.
-	 */
-	EventHelper.addRestrictedMapEvent = function(gameEvent) {
-		const mapId = $gameMap.mapId();
-		const eventName = gameEvent.event().name;
-
-		this._restrictedMapEvents[mapId] = this._restrictedMapEvents[mapId] || [];
-		this._restrictedMapEvents[mapId].push(eventName);
-	}
-
-	/**
-	 * Check if a Game_Event instance is already considered
-	 * to be a restricted map event, so that we don't add it again.
-	 * 
-	 * @see {@link gameEvent} in the "checkEventHasSwitchId" method for more details.
-	 * @returns {boolean} True if the Game_Event instance is already stored internally.
-	 */
-	EventHelper.isRestrictedMapEvent = function(gameEvent) {
-		const mapId = $gameMap.mapId();
-		const eventName = gameEvent.event().name;
-		const restrictedEvents = this._restrictedMapEvents[mapId] || [];
-
-		return restrictedEvents.includes(eventName);
-	}
-
-	/**
-	 * Get all Game_Event instances that are considered
-	 * restricted events based on the current map.
-	 * 
-	 * @returns {string[]} A list of Game_Event instance names 
-	 * that are considered restricted.
-	 */
-	EventHelper.getRestrictedMapEvents = function() {
-		const mapId = $gameMap.mapId();
-		return this._restrictedMapEvents[mapId] || [];
-	}
-
-	window._EventHelper = EventHelper;
-
 	//==========================================================
 		// Game_Map 
 	//==========================================================
 
-	/**
-	 * Call the method for preparing the 
-	 * restricted switches based on the map events.
-	 */
-	const TY_Game_Map_setupEvents = Game_Map.prototype.setupEvents;
+	_.checkEventHasSwitchId = function(event, targetSwitchId) {
+		return event.pages.some(page => {
+			const c = page.conditions;
+			return (
+				(c.switch1Id === targetSwitchId && c.switch1Valid) ||
+				(c.switch2Id === targetSwitchId && c.switch2Valid)
+			)
+		});
+	}
+
+	_.isEventRestricted = function(event) {
+		return restrictedEvents.includes(event.name) || _.checkEventHasSwitchId(event, /*switch_list*/);
+	}
+
+	_.test1 = function() {
+		const restrictedEvents = getRestrictedMapEvents();
+
+		for (const event of $gameMap.events()) {
+			if (!restrictedEvents.includes(event.event().name)) continue;
+
+			//
+		}
+	}
+
+	_.test2 = function() {
+		const restrictedEvents = getRestrictedCommonEvents();
+
+		for (const event of $gameMap._commonEvents) {
+			if (!restrictedEvents.includes(event.event().name)) continue;
+		}
+	}
+
+	/*const _Game_Map_setupEvents = Game_Map.prototype.setupEvents;
 	Game_Map.prototype.setupEvents = function() {
-		TY_Game_Map_setupEvents.call(this);
+		_Game_Map_setupEvents.call(this);
 
-	    this.prepareRestrictedSwitches();
-	};
-
-	/**
-	 * Search all Game_Event instances for restricted switches and
-	 * convert the events that use them into restricted map events. 
-	 */
-	Game_Map.prototype.prepareRestrictedSwitches = function() {
-	    for (const event of this.events()) {
-	    	EventHelper.searchForRestrictedSwitches(event);
-	    }
-	};
+	    
+	};*/
 
 	//==========================================================
 		// Game_CommonEvent 
 	//==========================================================
 
-	/*Game_CommonEvent.prototype.update = function() {
-
+	/*
+	const _Game_CommonEvent_update = Game_CommonEvent.prototype.update;
+	Game_CommonEvent.prototype.update = function() {
+		_Game_CommonEvent_update.call(this);
 	};*/
 
 	//==========================================================
 		// Game_Event 
 	//==========================================================
 
-	/*Game_Event.prototype.updateParallel = function() {
-
+	/*
+	const _Game_Event_updateParallel = Game_Event.prototype.updateParallel
+	Game_Event.prototype.updateParallel = function() {
+		_Game_Event_updateParallel.call(this);
 	};*/
 
 	//==========================================================
 		// Game_Interpreter 
 	//==========================================================
-
-	/*Game_Interpreter.prototype.setup = function(list, eventId) {
-	    this.clear();
-	    this._mapId = $gameMap.mapId();
-	    this._eventId = eventId || 0;
-	    this._list = list;
-	    Game_Interpreter.requestImages(list);
-	};*/
-
-	/**
-	 * Define new properties for the Game_Interpreter class.
-	 * 
-	 * @property {boolean} _updateLocked - Internal flag used to check
-	 * if an interpreter is allowed to be update or not.
-	 * 
-	 * @property {number} _delayFrames - The amount of frames to wait
-	 * before updates can be resumed.
-	 */
-	const TY_Game_Interpreter_clear = Game_Interpreter.prototype.clear;
-	Game_Interpreter.prototype.clear = function() {
-		TY_Game_Interpreter_clear.call(this);
-
-		this._commonEventId = 0;
-	};
-
-	const TY_Game_Interpreter_setupReservedCommonEvent = 
-		Game_Interpreter.prototype.setupReservedCommonEvent;
-	Game_Interpreter.prototype.setupReservedCommonEvent = function() {
-
-		if ($gameTemp.isCommonEventReserved()) {
-			this._commonEventId = $gameTemp.reservedCommonEvent();
-		}
-	    
-		return TY_Game_Interpreter_setupReservedCommonEvent.call(this);
-	};
 
 	/**
 	 * Check if an interpreter instance is allowed to change an actor's hp(body).
@@ -480,11 +304,11 @@ Imported.TY_FnHWaitForDialogue = true;
 	 * NOTE: This is a fallback in case a restricted event does not conform to
 	 * the naming conventions established in the "Mod Parameters" section of the mod.
 	 */
-	const TY_Game_Interpreter_command311 = Game_Interpreter.prototype.command311;
+	const _Game_Interpreter_command311 = Game_Interpreter.prototype.command311;
 	Game_Interpreter.prototype.command311 = function() {
 
 		//if (!InterpreterHelper.isSystemLocked()) {
-			return TY_Game_Interpreter_command311.call(this);
+			return _Game_Interpreter_command311.call(this);
 		//}
 
 	    return true;
@@ -496,11 +320,11 @@ Imported.TY_FnHWaitForDialogue = true;
 	 * NOTE: This is a fallback in case a restricted event does not conform to
 	 * the naming conventions established in the "Mod Parameters" section of the mod.
 	 */
-	const TY_Game_Interpreter_command312 = Game_Interpreter.prototype.command312;
+	const _Game_Interpreter_command312 = Game_Interpreter.prototype.command312;
 	Game_Interpreter.prototype.command312 = function() {
 
 		//if (!InterpreterHelper.isSystemLocked()) {
-	    	return TY_Game_Interpreter_command312.call(this);
+	    	return _Game_Interpreter_command312.call(this);
 		//}
 
 		return true;
@@ -512,14 +336,85 @@ Imported.TY_FnHWaitForDialogue = true;
 	 * NOTE: This is a fallback in case a restricted event does not conform to
 	 * the naming conventions established in the "Mod Parameters" section of the mod.
 	 */
-	const TY_Game_Interpreter_command315 = Game_Interpreter.prototype.command315;
+	const _Game_Interpreter_command315 = Game_Interpreter.prototype.command315;
 	Game_Interpreter.prototype.command315 = function() {
 
 		//if (!InterpreterHelper.isSystemLocked()) {
-	    	return TY_Game_Interpreter_command315.call(this);
+	    	return _Game_Interpreter_command315.call(this);
 		//}
 
 	    return true;
+	};
+
+		//==========================================================
+		// Message Helper
+	//==========================================================
+
+	// split the system into message handler and interpreter handler
+
+	_._messageStarted = false;
+
+	_._messageGraceTimer = 0;
+
+	_._MESSAGE_GRACE_FRAMES = 60;
+
+	_.onMessageStarted = function() {
+		_._messageStarted = true;
+		// stop events
+		console.log("message started");
+	}
+
+	_.getMessageGraceFrames = function() {
+		return _._MESSAGE_GRACE_FRAMES;
+	}
+
+	_.startMessageGracePeriod = function() {
+		_._messageGraceTimer = _.getMessageGraceFrames();
+		console.log("message concluded");
+	}
+
+	_.isMessageGracePeriodActive = function(messageWindow) {
+		return _._messageStarted && _._messageGraceTimer > 0 && messageWindow.isClosed();
+	}
+
+	_.updateMessageGracePeriod = function() {
+		_._messageGraceTimer--;
+
+		if (_._messageGraceTimer <= 0) {
+			_.onMessageConcluded();
+		}
+	}
+
+	_.onMessageConcluded = function() {
+		_._messageStarted = false;
+		// resume events
+		console.log("no new message started");
+	}
+
+	//==========================================================
+		// Window_Message
+	//==========================================================
+
+	const _Window_Message_update = Window_Message.prototype.update;
+	Window_Message.prototype.update = function() {
+		_Window_Message_update.call(this);
+
+		if (_.isMessageGracePeriodActive(this)) _.updateMessageGracePeriod();
+	};
+
+	const _Window_Message_startMessage = Window_Message.prototype.startMessage;
+	Window_Message.prototype.startMessage = function() {
+	    _Window_Message_startMessage.call(this);
+	    
+	    _.onMessageStarted();
+	};
+
+
+	const _Window_Message_terminateMessage = Window_Message.prototype.terminateMessage;
+	Window_Message.prototype.terminateMessage = function() {
+		_Window_Message_terminateMessage.call(this);
+
+		_.startMessageGracePeriod();
 	};
 
 	//==========================================================
@@ -705,40 +600,5 @@ Imported.TY_FnHWaitForDialogue = true;
 	//==========================================================
 		// End of File
 	//==========================================================
-
-	window._messageStarted = false;
-	window._messageTimer = 0;
-	window._MESSAGE_TIMER_VALUE = 60;
-
-	const _Window_Message_update = Window_Message.prototype.update;
-	Window_Message.prototype.update = function() {
-		_Window_Message_update.call(this);
-
-		if (window._messageStarted && window._messageTimer > 0 && this.isClosed()) {
-			window._messageTimer--;
-
-			if (window._messageTimer <= 0) {
-				window._messageStarted = false;
-				console.log("no new message started");
-			}
-		}
-	};
-
-	const _Window_Message_startMessage = Window_Message.prototype.startMessage;
-	Window_Message.prototype.startMessage = function() {
-	    _Window_Message_startMessage.call(this);
-	    
-	    window._messageStarted = true;
-	    console.log("message started");
-	};
-
-
-	const _Window_Message_terminateMessage = Window_Message.prototype.terminateMessage;
-	Window_Message.prototype.terminateMessage = function() {
-		_Window_Message_terminateMessage.call(this);
-
-		window._messageTimer = window._MESSAGE_TIMER_VALUE;
-		console.log("message ended");
-	};
 
 })(TY.fnhWaitForDialogue);
