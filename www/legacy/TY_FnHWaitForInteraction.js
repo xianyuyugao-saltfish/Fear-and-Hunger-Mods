@@ -3,57 +3,63 @@
 //==========================================================
 
 /**
- * [QUICK-SUMMARY]:
+ * [SUMMARY]:
  * 
- * Stops certain parellel map events and common events 
- * from running their commands when dialogue is being displayed.
+ * Stops certain events from advancing while
+ * dialogue interactions appear.
+ * Or, if the player visit special scenes like
+ * the hexen.
  * 
- * This in turn may prevent losing/gaining:
- * - Body
- * - Mind
- * - Hunger
- * 
- * The mod may also potentially improve the game's
- * performance while dialogue is being displayed.
+ * Affected events include:
+ * - Hunger Management
+ * - Bleeding 
+ * - Sanity Effects 
+ * - Hound Timer
+ * - Mahabre Timer
+ * - Rescue Timers(Le'garde, Buckman)
+ * etc.
  * 
  * [SPECIAL-THANKS]:
- * 
- * This mod has been commissioned by s0mthinG.
+ * - This mod has been commissioned by s0mthinG.
  */
 
 var TY = TY || {};
-TY.fnhWaitForDialogue = TY.fnhWaitForDialogue || {};
+TY.fnhWaitForInteraction = TY.fnhWaitForInteraction || {};
 
 var Imported = Imported || {};
-Imported.TY_FnHWaitForDialogue = true;
+Imported.TY_FnHWaitForInteraction = true;
 
 (function(_) { 
 
 	//==========================================================
-		// Mod Parameters 
+		// Mod Constants
 	//==========================================================
 
 	/**
-	 * The name of Parallel Map Events that are not allowed
-	 * to update while a dialogue is being displayed.
+	 * [USED-IN-BOTH-GAMES]:
 	 * 
-	 * These are named the same in both games, thankfully.
+	 * The names of Parallel Map Events that are not allowed
+	 * to update when:
+	 *     - Dialogue is displayed
+	 *     - The hexen or the fishing minigame is running.
 	 * 
-	 * @typeDef {string[]} restrictedMapEvents
+	 * [blood | blood2] - 
+	 *     Displays a blood trail if affected by "Anus Bleed" debuff.
+	 *     [NOTE]: In Termina this is used by the "Nausea" debuff instead.
 	 * 
-	 * @property {string} [blood | blood2] - 
-	 * Alternative bleeding or Nausea debuff(Termina)
+	 * [bleeding | bleeding2 | bleeding3] - 
+	 *     Displays a blood trail if affected by "Bleeding" debuff.
+	 *     [NOTE]: Only the first "bleeding" event handles the bleeding logic.
 	 * 
-	 * @property {string} [bleeding | bleeding2 | bleeding3] - 
-	 * Applies bleeding damage and the bleeding blood trail on the map
+	 * [sanity] - 
+	 *     Lose your sanity in dark or unsafe places.
+	 *     [WARNING]: Some events may not properly work or work at all, 
+	 *     but those cases should be few in numbers.
 	 * 
-	 * @property {string} sanity - Lose your sanity in dark or unsafe places.
-	 * [WARNING]: Some events may not properly work or work at all, but those cases
-	 * should be few in numbers.
-	 * 
-	 * @property {string} regain_sanity - Regains sanity in well lit or safe places.
-	 * [WARNING]: Some events may not properly work or work at all, but those cases
-	 * should be few in numbers.
+	 * [regain_sanity] - 
+	 *     Regains sanity in well lit or safe places.
+	 *     [WARNING]: Some events may not properly work or work at all,
+	 *     but those cases should be few in numbers.
 	 */
 	const restrictedMapEvents = [
 		"blood",
@@ -66,21 +72,21 @@ Imported.TY_FnHWaitForDialogue = true;
 	]
 
 	/**
-	 * The name of Parallel Map Events that are not allowed
-	 * to update while a dialogue is being displayed.
+	 * [FEAR-AND-HUNGER-1]:
 	 * 
-	 * NOTE(For Users): Feel free to remove the hound timer
+	 * The names of Parallel Map Events that are not allowed
+	 * to update.
+	 * 
+	 * [!] NOTE(For Users): Feel free to remove the hound timer
 	 * from here if you don't like it.
 	 * 
-	 * This is for Fear and Hunger 1.
+	 * [hound_TIMER | hound_TIMER2] - 
+	 *     The timer used outside 
+	 *     the fortress to call the hounds to attack you if you idle too long.
 	 * 
-	 * @typeDef {string[]} fnh1RestrictedMapEvents
-	 * 
-	 * @property {string} [hound_TIMER | hound_TIMER2] - The timer used outside 
-	 * the fortress to call the hounds to attack you if you idle too long.
-	 * 
-	 * @property {string} [mahabre_TIMER | mahabre_TIMER2] - The timer used in
-	 * Mahabre when you teleport via the Mahabre book.
+	 * [mahabre_TIMER | mahabre_TIMER2] - 
+	 *     The timer used in
+	 *     Mahabre when you teleport via the Mahabre book.
 	 */
 	const fnh1RestrictedMapEvents = [
 		...restrictedMapEvents,
@@ -91,18 +97,26 @@ Imported.TY_FnHWaitForDialogue = true;
 	]
 
 	/**
+	 * [FEAR-AND-HUNGER-1]:
+	 * 
 	 * The name of Parallel Common Events that are not allowed
-	 * to update while a dialogue is being displayed.
+	 * to update when:
+	 *     - Dialogue is displayed
+	 *     - The hexen or the fishing minigame is running.
 	 * 
-	 * This is for Fear and Hunger 1.
+	 * [HUNGER_of_*] - 
+	 *     Handles the hunger gain of a specific character.
 	 * 
-	 * @typeDef {string[]} fnh1RestrictedCommonEvents
+	 * [TIMER] -
+	 *     Probably the timer which limits how much time you
+	 *     have to save Le'garde.
 	 * 
-	 * @property {string} HUNGER_of_* - 
-	 * Handles the hunger gain of a specific character.
+	 * [TIMER_buckman] - 
+	 *     How much time you have to reach Buckman before he
+	 *     forms a marriage with Ser Seymor.
 	 * 
-	 * @property {string} TORCH_TIMER - 
-	 * Handles the luminosity and duration of the torch.
+	 * [TORCH_TIMER] - 
+	 *     Handles the luminosity and duration of the torch.
 	 */
 	const fnh1RestrictedCommonEvents = [
 		"HUNGER_of_GIRL",
@@ -119,24 +133,22 @@ Imported.TY_FnHWaitForDialogue = true;
 		"HUNGER_of_Ghoul1",
 		"HUNGER_of_Ghoul2",
 		"HUNGER_of_Ghoul3",
-		"TIMER", // probably legarde timer?
+		"TIMER",
 		"TIMER_buckman",
 		"TORCH_TIMER"
 	]
 
 	/**
+	 * [FEAR-AND-HUNGER-TERMINA]:
+	 * 
 	 * The name of Parallel Common Events that are not allowed
-	 * to update while a dialogue is being displayed.
+	 * to update.
 	 * 
-	 * This is for Fear and Hunger 2.
+	 * [HUNGER_of_*] - 
+	 *     Handles the hunger gain of a specific character.
 	 * 
-	 * @typeDef {string[]} fnh2RestrictedCommonEvents
-	 * 
-	 * @property {string} HUNGER_of_* - 
-	 * Handles the hunger gain of a specific character.
-	 * 
-	 * @property {string} RIFLEMAN_ATTENTION! - 
-	 * Handles the rifleman shooting on the riverside map.
+	 * [RIFLEMAN_ATTENTION!] - 
+	 *     Handles the rifleman shooting on the riverside map.
 	 */
 	const fnh2RestrictedCommonEvents = [
 		"HUNGER_of_OCCULTIST", // Marina
@@ -157,60 +169,97 @@ Imported.TY_FnHWaitForDialogue = true;
 		"RIFLEMAN_ATTENTION!"
 	]
 
-	//==========================================================
-		// Mod Parameters -- Edge Case Handling
-	//==========================================================
-
 	/**
+	 * [FEAR-AND-HUNGER-1]:
+	 * 
 	 * The ids of Game Switches that are found in the page
-	 * conditions of certain Game_Event instance.
+	 * conditions of certain Map Events.
 	 * 
-	 * NOTE: This is used to dynamically retrieve the name of
-	 * events that do not have a naming convention and
-	 * instead use the default RPG Maker event naming.
-	 * (ex: "EV176")
+	 * [NOTE]: The switches here are used in case an
+	 * event doesn't have a name assigned which can
+	 * be easily referenced.
 	 * 
-	 * This is for Fear and Hunger 1.
+	 * [EXAMPLE]: 
+	 * "EV176" on "level5_A" handles the "Yellow Mage Dance" mechanic.
 	 * 
-	 * @type {number[]}
 	 */
 	const fnh1RestrictedSwitchIds = [
 		343, // Yellow Mage Dance
 	];
 
 	/**
+	 * [FEAR-AND-HUNGER-TERMINA]:
+	 * 
 	 * The ids of Game Switches that are found in the page
-	 * conditions of certain Game_Event instance.
-	 * 
-	 * This is for Fear and Hunger 2.
-	 * 
-	 * @type {number[]}
+	 * conditions of certain Map Events.
 	 */
 	const fnh2RestrictedSwitchIds = [
 		3772, // Yellow Mage Dance
 	];
 
-	//==========================================================
-		// Mod Parameters -- Game Mode
-	//==========================================================
-
-	//
+	/**
+	 * [FEAR-AND-HUNGER-1]:
+	 * 
+	 * The ids of Game Switches that are found in the 
+	 * command list of certain Map Events.
+	 * 
+	 * [NOTE]: Unlike restricted events, these switches
+	 * are used to pause/resume events themselves.
+	 * 
+	 * [NOTE]: Switches added here should only be used
+	 * in cases like the Hexen Table where we don't want
+	 * restricted events to run.
+	 * (Like the Hunger altering ones)
+	 */
 	const fnh1GameModeSwitchIds = [
 		1210, // Hexen Cursor
 	]
 
-	//
+	/**
+	 * [FEAR-AND-HUNGER-TERMINA]:
+	 * 
+	 * The ids of Game Switches that are found in the 
+	 * command list of certain Map Events.
+	 * 
+	 * [NOTE]: The Fishing Minigame switch may only
+	 * be available in the Termina Update.
+	 * (Aka not Version 1.9.1)
+	 */
 	const fnh2GameModeSwitchIds = [
 		2420, // Hexen GFX
-		4813, // Fishing
+		4813, // Fishing Minigame
 	]
 
 	//==========================================================
-		// Mod Parameters -- Compatibility Mode
+		// Compatibility Mode
 	//==========================================================
 
-	// Whether to allow the interpreter to block the commands 
-	// for changing Body, Mind and Hunger.
+	/**
+	 * This is a feature dedicated to keeping the mod compatible
+	 * with third-party mods or future game updates.
+	 * 
+	 * Normally the mod works off of configurations defined
+	 * in the "Mod Constants" section of the mod.
+	 * 
+	 * But in case a mod decides to add additional 
+	 * "Map Events" / "Common Events" which alter the following:
+	 * - BODY
+	 * - MIND
+	 * - HUNGER
+	 * 
+	 * Compatibility Mode should ensure that at least those properties
+	 * of characters should not be changed, when:
+	 *     - Dialogue is displayed
+	 *     - The hexen or the fishing minigame is running.
+	 * 
+	 * [NOTE]: For proper compatibility or to include
+	 * cases not mentioned above, it is advised you create
+	 * a patch for the mod.
+	 * 
+	 * [P.S]: I have left a couple properties and methods below
+	 * in case they make modding easier or to handle bugs
+	 * (if there happen to be any).
+	 */
 
 	_._compatibilityMode = true;
 
@@ -227,40 +276,20 @@ Imported.TY_FnHWaitForDialogue = true;
 	//==========================================================
 
 	/**
-	 * Checks which FnH game instance is currently being played.
-	 * 
-	 * @returns {boolean} True if the current FnH instance is Termina.
+	 * Check if the current Fear and Hunger game being played is TERMINA.
 	 */
 	function isGameTermina() {
 		return $dataSystem.gameTitle.match(/TERMINA/gi);
 	}
 
-	/**
-	 * Get a list of restricted Parallel Map Events by their name.
-	 * 
-	 * @returns {string[]} A list with the names of the restricted
-	 * Parallel Map Events based on the Fear and Hunger game.
-	 */
 	function getRestrictedMapEvents() {
 		return isGameTermina() ? restrictedMapEvents : fnh1RestrictedMapEvents;
 	}
 
-	/**
-	 * Get a list of restricted Parallel Common Events by their name.
-	 * 
-	 * @returns {string[]} A list with the names of the restricted
-	 * Parallel Common Events based on the Fear and Hunger game.
-	 */
 	function getRestrictedCommonEvents() {
 		return isGameTermina() ? fnh2RestrictedCommonEvents : fnh1RestrictedCommonEvents;
 	}
 
-	/**
-	 * Get a list of restricted Game Switches by their id.
-	 * 
-	 * @returns {number[]} A list with the ids of the restricted
-	 * Game Switches based on the Fear and Hunger game.
-	 */
 	function getRestrictedSwitches() {
 		return isGameTermina() ? fnh2RestrictedSwitchIds : fnh1RestrictedSwitchIds;
 	}
@@ -273,10 +302,15 @@ Imported.TY_FnHWaitForDialogue = true;
 		// RestrictedEventsRegistrar 
 	//==========================================================
 
+	/**
+	 * This class is responsible for deciding which 
+	 * map events and common events should be classified as restricted.
+	 */
 	function RestrictedEventsRegistrar() {
 		throw new Error("This is a static class");
 	}
 
+	RestrictedEventsRegistrar._dataReady = false;
 	RestrictedEventsRegistrar._mapEventNames = null;
 	RestrictedEventsRegistrar._mapEventSwitches = null;
 	RestrictedEventsRegistrar._commonEventNames = null;
@@ -287,10 +321,17 @@ Imported.TY_FnHWaitForDialogue = true;
 		this.setupCommonEvents();
 	}
 
+	/**
+	 * [NOTE]: This is a good method to patch in case
+	 * you want to add/remove anything.
+	 */
 	RestrictedEventsRegistrar.initializeData = function() {
+		if (this._dataReady) return;
+
 		this._mapEventNames = getRestrictedMapEvents();
 		this._mapEventSwitches = getRestrictedSwitches();
 		this._commonEventNames = getRestrictedCommonEvents();
+		this._dataReady = true;
 	}
 
 	RestrictedEventsRegistrar.setupMapEvents = function() {
@@ -338,12 +379,21 @@ Imported.TY_FnHWaitForDialogue = true;
 		});
 	}
 
+	// allow the class to be access via the mod's namespace
 	_.RestrictedEventsRegistrar = RestrictedEventsRegistrar;
 
 	//==========================================================
 		// RestrictedEventsManager 
 	//==========================================================
 
+	/**
+	 * The central class which handles whether 
+	 * events should be paused or resumed.
+	 * 
+	 * This is used by other Manager classes, such as:
+	 * - GameModeManager
+	 * - DialogueManager
+	 */
 	function RestrictedEventsManager() {
 		throw new Error("This is a static class");
 	}
@@ -366,21 +416,25 @@ Imported.TY_FnHWaitForDialogue = true;
 		this._paused = false;
 	}
 
+	// allow the class to be access via the mod's namespace
 	_.RestrictedEventsManager = RestrictedEventsManager;
 
 	//==========================================================
 		// Game_Map 
 	//==========================================================
 
-	// NOTE: This won't trigger when loading a save file.
-	// Although it will trigger when you move to another map as normal.
-	//
-	// SEE "Scene_Map.prototype.onMapLoaded" for fix.
+	/**
+	 * [NOTE]: This won't trigger when loading a save file.
+	 * Although it will trigger when you move to another map as normal.
+	 *
+	 * See "Scene_Map.prototype.onMapLoaded" for fix.
+	 */
 	const _Game_Map_setupEvents = Game_Map.prototype.setupEvents;
 	Game_Map.prototype.setupEvents = function() {
 		_Game_Map_setupEvents.call(this);
 
 	    RestrictedEventsRegistrar.setup();
+	    GameModeManager.initializeData();
 	};
 
 	//==========================================================
@@ -439,7 +493,9 @@ Imported.TY_FnHWaitForDialogue = true;
 		// Game_Interpreter 
 	//==========================================================
 
-	// Control Switches
+	/**
+	 * Notify the "GameModeManager" every time a switch's value has been changed.
+	 */
 	const _Game_Interpreter_command121 = Game_Interpreter.prototype.command121;
 	Game_Interpreter.prototype.command121 = function() {
 	      
@@ -455,10 +511,7 @@ Imported.TY_FnHWaitForDialogue = true;
 	};
 
 	/**
-	 * Check if an interpreter instance is allowed to change an actor's hp(body).
-	 * 
-	 * NOTE: This is a fallback in case a restricted event does not conform to
-	 * the naming conventions established in the "Mod Parameters" section of the mod.
+	 * Actor HP - Body
 	 */
 	const _Game_Interpreter_command311 = Game_Interpreter.prototype.command311;
 	Game_Interpreter.prototype.command311 = function() {
@@ -468,10 +521,7 @@ Imported.TY_FnHWaitForDialogue = true;
 	};
 	
 	/**
-	 * Check if an interpreter instance is allowed to change an actor's mp(mind).
-	 * 
-	 * NOTE: This is a fallback in case a restricted event does not conform to
-	 * the naming conventions established in the "Mod Parameters" section of the mod.
+	 * Actor MP - Mind
 	 */
 	const _Game_Interpreter_command312 = Game_Interpreter.prototype.command312;
 	Game_Interpreter.prototype.command312 = function() {
@@ -481,10 +531,7 @@ Imported.TY_FnHWaitForDialogue = true;
 	};
 
 	/**
-	 * Check if an interpreter instance is allowed to change an actor's exp(hunger).
-	 * 
-	 * NOTE: This is a fallback in case a restricted event does not conform to
-	 * the naming conventions established in the "Mod Parameters" section of the mod.
+	 * Actor EXP - Hunger
 	 */
 	const _Game_Interpreter_command315 = Game_Interpreter.prototype.command315;
 	Game_Interpreter.prototype.command315 = function() {
@@ -497,18 +544,40 @@ Imported.TY_FnHWaitForDialogue = true;
 		// GameModeManager
 	//==========================================================
 
+	/**
+	 * This class is dedicated to the moments enters special
+	 * scenes which shouldn't affecting certain properties, like:
+	 * - BODY
+	 * - MIND
+	 * - HUNGER
+	 * 
+	 * The common special scene across both games being the Hexen.
+	 */
 	function GameModeManager() {
 		throw new Error("This is a static class");
 	}
 
+	GameModeManager._dataReady = false;
+	GameModeManager._gameModeSwitches = null;
 	GameModeManager._active = false;
 
-	GameModeManager.setActive = function(value) {
-		this._active = value;
+	/**
+	 * [NOTE]: This is a good method to patch in case
+	 * you want to add/remove anything.
+	 */
+	GameModeManager.initializeData = function() {
+		if (this._dataReady) return;
+
+		this._gameModeSwitches = getGameModeSwitches();
+		this._dataReady = true;
 	}
 
 	GameModeManager.isActive = function() {
 		return this._active;
+	}
+
+	GameModeManager.setActive = function(value) {
+		this._active = value;
 	}
 
 	GameModeManager.canChangeActiveState = function(newState) {
@@ -516,8 +585,14 @@ Imported.TY_FnHWaitForDialogue = true;
 		return currentState !== newState;
 	}
 
+	GameModeManager.isGameModeSwitch = function(switchId) {
+		return this._gameModeSwitches.includes(switchId);
+	}
+
 	GameModeManager.onSwitchChanged = function(switchId, value) {
+		if (!this.isGameModeSwitch(switchId)) return;
 		if (!this.canChangeActiveState(value)) return;
+
 		this.setActive(value);
 
 		if (value) {
@@ -536,10 +611,20 @@ Imported.TY_FnHWaitForDialogue = true;
 		RestrictedEventsManager.resumeEvents();
 	}
 
+	// allow the class to be access via the mod's namespace
+	_.GameModeManager = GameModeManager;
+
 	//==========================================================
 		// DialogueManager
 	//==========================================================
 
+	/**
+	 * This class is dedicated to when the player interacts
+	 * with Objects or NPCs which trigger dialogue sequences.
+	 * 
+	 * There is also a brief period of time that the system
+	 * stay active for even after an interaction has concluded.
+	 */
 	function DialogueManager() {
 		throw new Error("This is a static class");
 	}
@@ -586,6 +671,7 @@ Imported.TY_FnHWaitForDialogue = true;
 		RestrictedEventsManager.resumeEvents();
 	}
 
+	// allow the class to be access via the mod's namespace
 	_.DialogueManager = DialogueManager;
 
 	//==========================================================
@@ -612,29 +698,32 @@ Imported.TY_FnHWaitForDialogue = true;
 		// Scene_Map 
 	//==========================================================
 
-	_._playerRequiredExp = null;
+	_._hungerDebugValue = null;
 
 	_.updateHungerDebug = function() {
-		if ($gameParty.leader().nextRequiredExp() === _._playerRequiredExp) return;
+		if ($gameParty.leader().nextRequiredExp() === _._hungerDebugValue) return;
 
-		if (_._playerRequiredExp !== null) console.warn("hunger updated!");
-		_._playerRequiredExp = $gameParty.leader().nextRequiredExp();
+		if (_._hungerDebugValue !== null) console.warn("hunger updated!");
+		_._hungerDebugValue = $gameParty.leader().nextRequiredExp();
 	}
 
-	// Ensure the system is set up even after loading an existing save file.
+	/**
+	 * Ensure the system is set up even after loading an existing save file.
+	 */
 	const _Scene_Map_onMapLoaded = Scene_Map.prototype.onMapLoaded;
 	Scene_Map.prototype.onMapLoaded = function() {
 		_Scene_Map_onMapLoaded.call(this);
 
 		if (!SceneManager.isPreviousScene(Scene_Load)) return;
 		RestrictedEventsRegistrar.setup();
+		GameModeManager.initializeData();
 	};
 
 	const _Scene_Map_update = Scene_Map.prototype.update;
 	Scene_Map.prototype.update = function() {
 		_Scene_Map_update.call(this);
 
-		_.updateHungerDebug();
+		//_.updateHungerDebug();
 		if (!DialogueManager.isMessageGracePeriodActive()) return;
 		DialogueManager.updateMessageGracePeriod();
 	};
@@ -643,4 +732,4 @@ Imported.TY_FnHWaitForDialogue = true;
 		// End of File
 	//==========================================================
 
-})(TY.fnhWaitForDialogue);
+})(TY.fnhWaitForInteraction);
