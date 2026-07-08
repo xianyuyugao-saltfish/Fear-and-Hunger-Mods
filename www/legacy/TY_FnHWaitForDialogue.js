@@ -27,8 +27,6 @@ TY.fnhWaitForDialogue = TY.fnhWaitForDialogue || {};
 var Imported = Imported || {};
 Imported.TY_FnHWaitForDialogue = true;
 
-// NOTE: Make it so that you don't lose mind/hunger when the Hexen map/system is active.
-
 (function(_) { 
 
 	//==========================================================
@@ -176,7 +174,9 @@ Imported.TY_FnHWaitForDialogue = true;
 	 * 
 	 * @type {number[]}
 	 */
-	const fnh1RestrictedSwitchIds = [343]; // Yellow Mage Dance
+	const fnh1RestrictedSwitchIds = [
+		343, // Yellow Mage Dance
+	];
 
 	/**
 	 * The ids of Game Switches that are found in the page
@@ -186,7 +186,41 @@ Imported.TY_FnHWaitForDialogue = true;
 	 * 
 	 * @type {number[]}
 	 */
-	const fnh2RestrictedSwitchIds = [3772]; // Yellow Mage Dance
+	const fnh2RestrictedSwitchIds = [
+		3772, // Yellow Mage Dance
+	];
+
+	//==========================================================
+		// Mod Parameters -- Game Mode
+	//==========================================================
+
+	//
+	const fnh1GameModeSwitchIds = [
+		1210, // Hexen Cursor
+	]
+
+	//
+	const fnh2GameModeSwitchIds = [
+		2420, // Hexen GFX
+		4813, // Fishing
+	]
+
+	//==========================================================
+		// Mod Parameters -- Compatibility Mode
+	//==========================================================
+
+	// Whether to allow the interpreter to block the commands 
+	// for changing Body, Mind and Hunger.
+
+	_._compatibilityMode = true;
+
+	_.setCompatibilityMode = function(value) {
+		_._compatibilityMode = value;
+	}
+
+	_.isCompatibilityMode = function() {
+		return _._compatibilityMode;
+	}
 
 	//==========================================================
 		// Mod Utility Methods
@@ -231,12 +265,71 @@ Imported.TY_FnHWaitForDialogue = true;
 		return isGameTermina() ? fnh2RestrictedSwitchIds : fnh1RestrictedSwitchIds;
 	}
 
+	function getGameModeSwitches() {
+		return isGameTermina() ? fnh2GameModeSwitchIds : fnh1GameModeSwitchIds;
+	}
+
 	//==========================================================
-		// Game_Map 
+		// RestrictedEventsRegistrar 
 	//==========================================================
 
-	_.checkEventHasSwitchId = function(event, targetSwitchId) {
-		return event.pages.some(page => {
+	function RestrictedEventsRegistrar() {
+		throw new Error("This is a static class");
+	}
+
+	RestrictedEventsRegistrar._mapEventNames = null;
+	RestrictedEventsRegistrar._mapEventSwitches = null;
+	RestrictedEventsRegistrar._commonEventNames = null;
+
+	RestrictedEventsRegistrar.setup = function() {
+		this.initializeData();
+		this.setupMapEvents();
+		this.setupCommonEvents();
+	}
+
+	RestrictedEventsRegistrar.initializeData = function() {
+		this._mapEventNames = getRestrictedMapEvents();
+		this._mapEventSwitches = getRestrictedSwitches();
+		this._commonEventNames = getRestrictedCommonEvents();
+	}
+
+	RestrictedEventsRegistrar.setupMapEvents = function() {
+		for (const event of $gameMap.events()) {
+
+			if (!this.isRestrictedMapEvent(event.event())) continue;
+			RestrictedEventsManager.configureEvent(event);
+		}
+	}
+
+	RestrictedEventsRegistrar.setupCommonEvents = function() {
+		for (const event of $gameMap._commonEvents) {
+
+			if (!this.isRestrictedCommonEvent(event.event())) continue;
+			RestrictedEventsManager.configureEvent(event);
+		}
+	}
+
+	RestrictedEventsRegistrar.isRestrictedMapEvent = function(eventData) {
+		return (
+			this.isEventRestrictedByName(eventData, this._mapEventNames) || 
+			this.isEventRestrictedBySwitch(eventData, this._mapEventSwitches)
+		);
+	}
+
+	RestrictedEventsRegistrar.isRestrictedCommonEvent = function(eventData) {
+		return this.isEventRestrictedByName(eventData, this._commonEventNames);
+	}
+
+	RestrictedEventsRegistrar.isEventRestrictedByName = function(eventData, restrictedNames) {
+		return restrictedNames.includes(eventData.name);
+	}
+
+	RestrictedEventsRegistrar.isEventRestrictedBySwitch = function(eventData, restrictedSwitches) {
+		return restrictedSwitches.some(switchId => this.checkEventSwitchCondition(eventData, switchId));
+	}
+
+	RestrictedEventsRegistrar.checkEventSwitchCondition = function(eventData, targetSwitchId) {
+		return eventData.pages.some(page => {
 			const c = page.conditions;
 			return (
 				(c.switch1Id === targetSwitchId && c.switch1Valid) ||
@@ -245,58 +338,121 @@ Imported.TY_FnHWaitForDialogue = true;
 		});
 	}
 
-	_.isEventRestricted = function(event) {
-		return restrictedEvents.includes(event.name) || _.checkEventHasSwitchId(event, /*switch_list*/);
+	_.RestrictedEventsRegistrar = RestrictedEventsRegistrar;
+
+	//==========================================================
+		// RestrictedEventsManager 
+	//==========================================================
+
+	function RestrictedEventsManager() {
+		throw new Error("This is a static class");
 	}
 
-	_.test1 = function() {
-		const restrictedEvents = getRestrictedMapEvents();
+	RestrictedEventsManager._paused = false;
 
-		for (const event of $gameMap.events()) {
-			if (!restrictedEvents.includes(event.event().name)) continue;
-
-			//
-		}
+	RestrictedEventsManager.configureEvent = function(event) {
+		event.setRestrictedUpdates(true);
 	}
 
-	_.test2 = function() {
-		const restrictedEvents = getRestrictedCommonEvents();
-
-		for (const event of $gameMap._commonEvents) {
-			if (!restrictedEvents.includes(event.event().name)) continue;
-		}
+	RestrictedEventsManager.isPaused = function() {
+		return this._paused;
 	}
 
-	/*const _Game_Map_setupEvents = Game_Map.prototype.setupEvents;
+	RestrictedEventsManager.pauseEvents = function() {
+		this._paused = true;
+	}
+
+	RestrictedEventsManager.resumeEvents = function() {
+		this._paused = false;
+	}
+
+	_.RestrictedEventsManager = RestrictedEventsManager;
+
+	//==========================================================
+		// Game_Map 
+	//==========================================================
+
+	// NOTE: This won't trigger when loading a save file.
+	// Although it will trigger when you move to another map as normal.
+	//
+	// SEE "Scene_Map.prototype.onMapLoaded" for fix.
+	const _Game_Map_setupEvents = Game_Map.prototype.setupEvents;
 	Game_Map.prototype.setupEvents = function() {
 		_Game_Map_setupEvents.call(this);
 
-	    
-	};*/
+	    RestrictedEventsRegistrar.setup();
+	};
 
 	//==========================================================
 		// Game_CommonEvent 
 	//==========================================================
 
-	/*
+	const _Game_CommonEvent_initialize = Game_CommonEvent.prototype.initialize;
+	Game_CommonEvent.prototype.initialize = function(commonEventId) {
+		_Game_CommonEvent_initialize.call(this, commonEventId);
+		
+		this._hasRestrictedUpdates = false;
+	};
+
+	Game_CommonEvent.prototype.setRestrictedUpdates = function(value) {
+		this._hasRestrictedUpdates = value;
+	}
+
+	Game_CommonEvent.prototype.isUpdatePaused = function() {
+		return this._hasRestrictedUpdates && RestrictedEventsManager.isPaused();
+	}
+	
 	const _Game_CommonEvent_update = Game_CommonEvent.prototype.update;
 	Game_CommonEvent.prototype.update = function() {
+		if (this.isUpdatePaused()) return;
+
 		_Game_CommonEvent_update.call(this);
-	};*/
+	};
 
 	//==========================================================
 		// Game_Event 
 	//==========================================================
 
-	/*
-	const _Game_Event_updateParallel = Game_Event.prototype.updateParallel
+	const _Game_Event_initMembers = Game_Event.prototype.initMembers;
+	Game_Event.prototype.initMembers = function() {
+		_Game_Event_initMembers.call(this);
+
+		this._hasRestrictedUpdates = false;
+	};
+
+	Game_Event.prototype.setRestrictedUpdates = function(value) {
+		Game_CommonEvent.prototype.setRestrictedUpdates.call(this, value);
+	}
+
+	Game_Event.prototype.isUpdatePaused = function() {
+		return Game_CommonEvent.prototype.isUpdatePaused.call(this);
+	}
+	
+	const _Game_Event_updateParallel = Game_Event.prototype.updateParallel;
 	Game_Event.prototype.updateParallel = function() {
+		if (this.isUpdatePaused()) return;
+
 		_Game_Event_updateParallel.call(this);
-	};*/
+	};
 
 	//==========================================================
 		// Game_Interpreter 
 	//==========================================================
+
+	// Control Switches
+	const _Game_Interpreter_command121 = Game_Interpreter.prototype.command121;
+	Game_Interpreter.prototype.command121 = function() {
+	      
+		const switchId = this._params[0];
+	    const lastSwitchId = this._params[1];
+	    const newValue = this._params[2] === 0; // 0 = true, 1 = false
+	
+		for (let i = switchId; i <= lastSwitchId; i++) {
+			GameModeManager.onSwitchChanged(i, newValue);
+		}
+	
+		return _Game_Interpreter_command121.call(this);
+	};
 
 	/**
 	 * Check if an interpreter instance is allowed to change an actor's hp(body).
@@ -307,11 +463,8 @@ Imported.TY_FnHWaitForDialogue = true;
 	const _Game_Interpreter_command311 = Game_Interpreter.prototype.command311;
 	Game_Interpreter.prototype.command311 = function() {
 
-		//if (!InterpreterHelper.isSystemLocked()) {
-			return _Game_Interpreter_command311.call(this);
-		//}
-
-	    return true;
+		if (_.isCompatibilityMode() && RestrictedEventsManager.isPaused()) return true;
+		return _Game_Interpreter_command311.call(this);
 	};
 	
 	/**
@@ -323,11 +476,8 @@ Imported.TY_FnHWaitForDialogue = true;
 	const _Game_Interpreter_command312 = Game_Interpreter.prototype.command312;
 	Game_Interpreter.prototype.command312 = function() {
 
-		//if (!InterpreterHelper.isSystemLocked()) {
-	    	return _Game_Interpreter_command312.call(this);
-		//}
-
-		return true;
+		if (_.isCompatibilityMode() && RestrictedEventsManager.isPaused()) return true;
+	    return _Game_Interpreter_command312.call(this);
 	};
 
 	/**
@@ -339,262 +489,154 @@ Imported.TY_FnHWaitForDialogue = true;
 	const _Game_Interpreter_command315 = Game_Interpreter.prototype.command315;
 	Game_Interpreter.prototype.command315 = function() {
 
-		//if (!InterpreterHelper.isSystemLocked()) {
-	    	return _Game_Interpreter_command315.call(this);
-		//}
-
-	    return true;
+		if (_.isCompatibilityMode() && RestrictedEventsManager.isPaused()) return true;
+	    return _Game_Interpreter_command315.call(this);
 	};
 
-		//==========================================================
-		// Message Helper
+	//==========================================================
+		// GameModeManager
 	//==========================================================
 
-	// split the system into message handler and interpreter handler
-
-	_._messageStarted = false;
-
-	_._messageGraceTimer = 0;
-
-	_._MESSAGE_GRACE_FRAMES = 60;
-
-	_.onMessageStarted = function() {
-		_._messageStarted = true;
-		// stop events
-		console.log("message started");
+	function GameModeManager() {
+		throw new Error("This is a static class");
 	}
 
-	_.getMessageGraceFrames = function() {
-		return _._MESSAGE_GRACE_FRAMES;
+	GameModeManager._active = false;
+
+	GameModeManager.setActive = function(value) {
+		this._active = value;
 	}
 
-	_.startMessageGracePeriod = function() {
-		_._messageGraceTimer = _.getMessageGraceFrames();
-		console.log("message concluded");
+	GameModeManager.isActive = function() {
+		return this._active;
 	}
 
-	_.isMessageGracePeriodActive = function(messageWindow) {
-		return _._messageStarted && _._messageGraceTimer > 0 && messageWindow.isClosed();
+	GameModeManager.canChangeActiveState = function(newState) {
+		const currentState = this.isActive();
+		return currentState !== newState;
 	}
 
-	_.updateMessageGracePeriod = function() {
-		_._messageGraceTimer--;
+	GameModeManager.onSwitchChanged = function(switchId, value) {
+		if (!this.canChangeActiveState(value)) return;
+		this.setActive(value);
 
-		if (_._messageGraceTimer <= 0) {
-			_.onMessageConcluded();
+		if (value) {
+			this.onGameModeStart();
+		} else {
+			this.onGameModeEnd();
 		}
 	}
 
-	_.onMessageConcluded = function() {
-		_._messageStarted = false;
-		// resume events
-		console.log("no new message started");
+	GameModeManager.onGameModeStart = function() {
+		DialogueManager.clear();
+		RestrictedEventsManager.pauseEvents();
 	}
+
+	GameModeManager.onGameModeEnd = function() {
+		RestrictedEventsManager.resumeEvents();
+	}
+
+	//==========================================================
+		// DialogueManager
+	//==========================================================
+
+	function DialogueManager() {
+		throw new Error("This is a static class");
+	}
+
+	DialogueManager._messageActive = false;
+	DialogueManager._messageGraceTimer = 0;
+
+	DialogueManager.clear = function() {
+		this._messageActive = false;
+		this._messageGraceTimer = 0;
+	}
+
+	DialogueManager.isEnabled = function() {
+		return !GameModeManager.isActive();
+	}
+
+	DialogueManager.onMessageStarted = function() {
+		this._messageActive = true;
+		RestrictedEventsManager.pauseEvents();
+	}
+
+	DialogueManager.getMessageGraceFrames = function() {
+		return 60;
+	}
+
+	DialogueManager.startMessageGracePeriod = function() {
+		this._messageGraceTimer = this.getMessageGraceFrames();
+	}
+
+	DialogueManager.isMessageGracePeriodActive = function() {
+		const messageWindow = SceneManager._scene._messageWindow;
+		return this._messageActive && this._messageGraceTimer > 0 && messageWindow.isClosed();
+	}
+
+	DialogueManager.updateMessageGracePeriod = function() {
+		this._messageGraceTimer--;
+
+		if (this._messageGraceTimer > 0) return;
+		this.onMessageConcluded();
+	}
+
+	DialogueManager.onMessageConcluded = function() {
+		this._messageActive = false;
+		RestrictedEventsManager.resumeEvents();
+	}
+
+	_.DialogueManager = DialogueManager;
 
 	//==========================================================
 		// Window_Message
 	//==========================================================
 
-	const _Window_Message_update = Window_Message.prototype.update;
-	Window_Message.prototype.update = function() {
-		_Window_Message_update.call(this);
-
-		if (_.isMessageGracePeriodActive(this)) _.updateMessageGracePeriod();
-	};
-
 	const _Window_Message_startMessage = Window_Message.prototype.startMessage;
 	Window_Message.prototype.startMessage = function() {
 	    _Window_Message_startMessage.call(this);
 	    
-	    _.onMessageStarted();
+	    if (!DialogueManager.isEnabled()) return;
+	    DialogueManager.onMessageStarted();
 	};
-
 
 	const _Window_Message_terminateMessage = Window_Message.prototype.terminateMessage;
 	Window_Message.prototype.terminateMessage = function() {
 		_Window_Message_terminateMessage.call(this);
 
-		_.startMessageGracePeriod();
-	};
-
-	//==========================================================
-		// Sprite_HelperPopup
-	//==========================================================
-
-	function Sprite_HelperPopup() {
-	    this.initialize.apply(this, arguments);
-	}
-	
-	Sprite_HelperPopup.prototype = Object.create(Sprite.prototype);
-	Sprite_HelperPopup.prototype.constructor = Sprite_HelperPopup;
-
-	/**
-	 * 
-	 */
-	Sprite_HelperPopup.VISIBILITY_INTERVAL = 120;
-
-	Sprite_HelperPopup.TEXT_DISPLAY = {
-		SYSTEM_STATUS: "systemStatus",
-		HUNGER_STATUS: "hungerStatus",
-	}
-
-	/**
-	 * Field that stores the Rectangle object for the popup bitmap
-	 * so that we don't need to re-create the Rectangle object 
-	 * every single time we try to retrieve it.
-	 * 
-	 * @type {Rectangle}
-	 * @private
-	 */
-	Sprite_HelperPopup._defaultBitmapRect = null;
-
-	Sprite_HelperPopup.createDefaultBitmapRect = function() {
-		const padding = 16;
-
-		const width = 350; // hardcoded bitmap width
-		const height = Window_Base.prototype.lineHeight();
-		const x = Graphics.boxWidth - width - padding;
-		const y = padding;
-
-		return new Rectangle(x, y, width, height);
-	}
-
-	Sprite_HelperPopup.getDefaultBitmapRect = function() {
-		if (!this._defaultBitmapRect) {
-			this._defaultBitmapRect = this.createDefaultBitmapRect();
-		} 
-
-		return this._defaultBitmapRect;
-	}
-
-	/*Sprite_HelperPopup.getInterpreterHelperSystemStatus = function() {
-		const systemStatus = InterpreterHelper.isSystemEnabled();
-		const systemStatus = true;
-		const statusText = systemStatus ? "Enabled" : "Disabled";
-		return `Interpreter Helper Status: ${statusText}`;
-	}*/
-
-	Sprite_HelperPopup.getPlayerHungerStatus = function() {
-		return `Player Hunger Updated: ${$gameParty.leader().nextRequiredExp()}`;
-	}
-
-	Sprite_HelperPopup.getTextDisplay = function(displayKey) {
-		const displayEntries = {
-			//[this.TEXT_DISPLAY.SYSTEM_STATUS]: this.getInterpreterHelperSystemStatus(),
-			[this.TEXT_DISPLAY.HUNGER_STATUS]: this.getPlayerHungerStatus()
-		}
-
-		return displayEntries[displayKey] || "";
-	}
-
-	Sprite_HelperPopup.prototype.initialize = function() {
-
-		this.opacity = 0;
-
-		this._visibilityInterval = 0;
-
-		const bitmapRect = Sprite_HelperPopup.getDefaultBitmapRect();
-		const bitmap = new Bitmap(bitmapRect.width, bitmapRect.height);
-
-		Sprite.prototype.initialize.call(this, bitmap);
-	}
-
-	Sprite_HelperPopup.prototype.refreshDisplay = function() {
-		const text = Sprite_HelperPopup.getTextDisplay(this.mode);
-		const bitmapRect = Sprite_HelperPopup.getDefaultBitmapRect();
-
-		const textObject = {
-			text,
-			x: 0,
-			y: 0,
-			maxWidth: bitmapRect.width,
-			lineHeight: bitmapRect.height,
-			align: "center"
-		};
-
-		if (this.bitmap) {
-			this.bitmap.clear();
-
-			this.bitmap.paintOpacity = 192;
-			this.bitmap.fillAll("black");
-			this.bitmap.paintOpacity = 255;
-			
-			this.bitmap.fontFace = Window_Base.prototype.standardFontFace();
-			this.bitmap.fontSize = Window_Base.prototype.standardFontSize() - 6;
-			this.bitmap.drawText(...Object.values(textObject));
-		}
-
-		this.opacity = 255;
-		this._visibilityInterval = Sprite_HelperPopup.VISIBILITY_INTERVAL;
-	}
-
-	Sprite_HelperPopup.prototype.update = function() {
-		Sprite.prototype.update.call(this);
-		this.updateVisibility();
-	};
-
-	Sprite_HelperPopup.prototype.updateVisibility = function() {
-		if (this._visibilityInterval > 0) {
-
-			const fadeInterval = Sprite_HelperPopup.VISIBILITY_INTERVAL / 2;
-
-			this._visibilityInterval--;
-
-			if (this._visibilityInterval < fadeInterval) {
-				this.opacity = 255 * this._visibilityInterval / fadeInterval;
-			}
-		}
+		if (!DialogueManager.isEnabled()) return;
+		DialogueManager.startMessageGracePeriod();
 	};
 
 	//==========================================================
 		// Scene_Map 
 	//==========================================================
 
-	const TY_Scene_Map_createDisplayObjects = Scene_Map.prototype.createDisplayObjects;
-	Scene_Map.prototype.createDisplayObjects = function() {
-		TY_Scene_Map_createDisplayObjects.call(this);
+	_._playerRequiredExp = null;
 
-		//this.createSystemStatusPopup();
-		this.createHungerStatusPopup();
+	_.updateHungerDebug = function() {
+		if ($gameParty.leader().nextRequiredExp() === _._playerRequiredExp) return;
+
+		if (_._playerRequiredExp !== null) console.warn("hunger updated!");
+		_._playerRequiredExp = $gameParty.leader().nextRequiredExp();
+	}
+
+	// Ensure the system is set up even after loading an existing save file.
+	const _Scene_Map_onMapLoaded = Scene_Map.prototype.onMapLoaded;
+	Scene_Map.prototype.onMapLoaded = function() {
+		_Scene_Map_onMapLoaded.call(this);
+
+		if (!SceneManager.isPreviousScene(Scene_Load)) return;
+		RestrictedEventsRegistrar.setup();
 	};
 
-	/*Scene_Map.prototype.createSystemStatusPopup = function() {
-		const bitmapRect = Sprite_HelperPopup.getDefaultBitmapRect();
-
-	    this._systemstatusPopup = new Sprite_HelperPopup();
-	    this._systemstatusPopup.mode = Sprite_HelperPopup.TEXT_DISPLAY.SYSTEM_STATUS;
-	    this._systemstatusPopup.x = bitmapRect.x;
-		this._systemstatusPopup.y = bitmapRect.y;
-
-	    this.addChild(this._systemstatusPopup);
-	};*/
-
-	Scene_Map.prototype.createHungerStatusPopup = function() {
-		const bitmapRect = Sprite_HelperPopup.getDefaultBitmapRect();
-		const padding = 8;
-
-	    this._hungerStatusPopup = new Sprite_HelperPopup();
-	    this._hungerStatusPopup.mode = Sprite_HelperPopup.TEXT_DISPLAY.HUNGER_STATUS;
-	    this._hungerStatusPopup.x = bitmapRect.x;
-		this._hungerStatusPopup.y = bitmapRect.y + bitmapRect.height + padding;
-
-	    this.addChild(this._hungerStatusPopup);
-	};
-
-	/*Scene_Map.prototype.refreshHelperPopupSprites = function() {
-	    this._systemstatusPopup.refreshDisplay();
-	};*/
-
-	const TY_Scene_Map_update = Scene_Map.prototype.update;
+	const _Scene_Map_update = Scene_Map.prototype.update;
 	Scene_Map.prototype.update = function() {
-		TY_Scene_Map_update.call(this);
+		_Scene_Map_update.call(this);
 
-		this._playerRequiredExp = this._playerRequiredExp || null;
-
-		if ($gameParty.leader().nextRequiredExp() !== this._playerRequiredExp) {
-			this._hungerStatusPopup.refreshDisplay();
-			this._playerRequiredExp = $gameParty.leader().nextRequiredExp();
-		}
+		_.updateHungerDebug();
+		if (!DialogueManager.isMessageGracePeriodActive()) return;
+		DialogueManager.updateMessageGracePeriod();
 	};
 
 	//==========================================================
