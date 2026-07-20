@@ -26,6 +26,14 @@ Imported.TY_FnHEquipSlotEditor = true;
         // Utility Methods
     //==========================================================
 
+    _.windowHubCommands = [
+        {
+            name: "Open", symbol: "open",
+            name: "Create", symbol: "create",
+            name: "Exit", symbol: "exit"
+        }
+    ]
+
     _.centerOnScreen = function(sprite) {
         sprite.x = (Graphics.width - sprite.width) / 2;
         sprite.y = (Graphics.height - sprite.height) / 2;
@@ -50,9 +58,9 @@ Imported.TY_FnHEquipSlotEditor = true;
     Window_Hub.prototype.initialize = function(x, y, width, height) {
         Window_Base.prototype.initialize.call(this, x, y, width, height);
 
-        this.drawTitle();
-        this.drawAuthor();
-        this.drawVersion();
+        //this.drawTitle();
+        //this.drawAuthor();
+        //this.drawVersion();
     }
 
     Window_Hub.prototype.drawTitle = function() {
@@ -102,6 +110,11 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.drawText(...Object.values(textArgs));
     }
 
+    Window_Hub.prototype.clearContents = function() {
+        this.contents.clear();
+        this.createContents(); // temporarily added here
+    }
+
     _.Window_Hub = Window_Hub;
 
     //==========================================================
@@ -118,6 +131,7 @@ Imported.TY_FnHEquipSlotEditor = true;
     Window_HubCommands.prototype.initialize = function(x, y) {
         Window_Command.prototype.initialize.call(this, x, y);
 
+        // could add this inside the "createContents" method
         this._contentsBackSprite = new Sprite();
         this._contentsBackSprite.bitmap = new Bitmap(this.contentsWidth(), this.contentsHeight());
         this._windowSpriteContainer.addChild(this._contentsBackSprite);
@@ -153,12 +167,13 @@ Imported.TY_FnHEquipSlotEditor = true;
     Window_HubCommands.prototype.drawBackgroundRect = function(rect) {
         if (!this._contentsBackSprite) return;
 
-        //const c = "#5a4256";
-        const c = "rgba(90, 66, 86, 0.5)";
-        const x = rect.x + 2;
-        const y = rect.y + 2;
-        const w = rect.width - 4;
-        const h = rect.height - 4;
+        const margin = 8;
+
+        const c = "#403840";
+        const x = rect.x + margin / 2;
+        const y = rect.y + margin / 2;
+        const w = rect.width - margin;
+        const h = rect.height - margin;
         this._contentsBackSprite.bitmap.fillRect(x, y, w, h, c);
     };
 
@@ -224,7 +239,7 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.createBackground();
         this.createWindowLayer();
         this.createHubWindow();
-        this.createHubCommandsWindow();
+        //this.createHubCommandsWindow();
     };
 
     Scene_Editor.prototype.createBackground = function() {
@@ -241,12 +256,14 @@ Imported.TY_FnHEquipSlotEditor = true;
     Scene_Editor.prototype.createHubWindow = function() {
 
         const padding = 16;
+        const itemHeight = 54;
 
         const rect = {
             x: 0,
             y: 0,
             width: Graphics.width / 2,
-            height: Graphics.height / 2 + padding
+            //height: Graphics.height / 2 + padding
+            height: 72 // lineHeight() * 2
         };
 
         this._hubWindow = new Window_Hub(...Object.values(rect));
@@ -273,63 +290,6 @@ Imported.TY_FnHEquipSlotEditor = true;
     //==========================================================
 
 })(TY.fnHEquipSlotEditor);
-
-
-/*function Window_Hub() {
-    this.initialize.apply(this, arguments);
-}
-
-Window_Hub.prototype = Object.create(Window_Base.prototype);
-Window_Hub.prototype.constructor = Window_Hub;
-
-Window_Hub.prototype.initialize = function(x, y, width, height) {
-    Window_Base.prototype.initialize.call(this, x, y, width, height);
-};*/
-
-// center window
-//
-// winHub.x = (Graphics.width - 400) / 2;
-// winHub.y = (Graphics.height - 400) / 2;
-//
-// "400" is the window's with or height respectively
-
-
-
-
-// hide window background and frame
-//winCom._windowFrameSprite.visible = false;
-//winCom.margin = 0; // remove weird transparency created by removing the window frame
-
-
-
-
-
-
-/*
-
-Window_Command.prototype._refreshBack = function() {
-var m = this._margin;
-    var w = this._width - m * 2;
-    var h = this._height - m * 2;
-    var bitmap = new Bitmap(w, h);
-
-    this._windowBackSprite.bitmap = bitmap;
-    this._windowBackSprite.setFrame(0, 0, w, h);
-    this._windowBackSprite.move(m, m);
-
-    if (w > 0 && h > 0 && this._windowskin) {
-        var p = 95; // leaving this at 96 leaves a clipping line when hiding the window frame
-        bitmap.blt(this._windowskin, 0, 0, p, p, 0, 0, w, h);
-        for (var y = 0; y < h; y += p) {
-            for (var x = 0; x < w; x += p) {
-                bitmap.blt(this._windowskin, 0, p, p, p, x, y, p, p);
-            }
-        }
-        var tone = this._colorTone;
-        bitmap.adjustTone(tone[0], tone[1], tone[2]);
-    }
-};
-*/
 
 
 /*
@@ -417,25 +377,6 @@ Window_HorzCommand.prototype.maxCols = function() {
 
 
 
-/*
-function Window_Help() {
-    this.initialize.apply(this, arguments);
-}
-
-Window_Help.prototype = Object.create(Window_Base.prototype);
-Window_Help.prototype.constructor = Window_Help;
-
-Window_Help.prototype.initialize = function(numLines) {
-    var width = Graphics.boxWidth;
-    var height = this.fittingHeight(numLines || 2);
-    Window_Base.prototype.initialize.call(this, 0, 0, width, height);
-    this._text = '';
-};
-*/
-
-
-
-
 /* -- Make another prototype of this class and eliminate the Actor Face!
 
 Window_NewNameHere.prototype = Object.create(Window_NameEdit.prototype);
@@ -484,10 +425,6 @@ And lastly.
 You can indeed use "Window_NameInput" and pass the "editWindow" as being the "Window_NewNameHere".
 
  */
-
-// Helper method
-// (Check if number is odd by checking if the remainder is 1)
-// 18 % 2 === 1
 
 
 // Don't forget to use "Window_Status.prototype.drawHorzLine" to handle horizontal lines.
