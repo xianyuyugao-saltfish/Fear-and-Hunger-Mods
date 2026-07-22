@@ -27,11 +27,10 @@ Imported.TY_FnHEquipSlotEditor = true;
     //==========================================================
 
     _.windowHubCommands = [
-        {
-            name: "Open", symbol: "open",
-            name: "Create", symbol: "create",
-            name: "Exit", symbol: "exit"
-        }
+        { name: "Open", symbol: "open" },
+        { name: "Create", symbol: "create" },
+        { name: "Options", symbol: "options" },
+        { name: "Exit", symbol: "exit" },
     ]
 
     _.centerOnScreen = function(sprite) {
@@ -43,6 +42,31 @@ Imported.TY_FnHEquipSlotEditor = true;
         child.x = parent.x + (parent.width - child.width) / 2;
         child.y = parent.y + (parent.height - child.height) / 2;
     }
+
+    // needs a layer system or something
+    // because i'll need to place a ScreenSprite between or above windows
+
+    // maybe a "layerId" passed along the window object?
+    // and the scene decides which layer is active
+    _.addWindowToScene = function(win) {
+        SceneManager._scene.addWindow(win);
+    }
+
+    //==========================================================
+        // EditorLayout
+    //==========================================================
+
+    function EditorLayout() {
+        throw new Error("This is a static class");
+    }
+
+    EditorLayout.LINE_HEIGHT = 36;
+    EditorLayout.TITLE_AREA_HEIGHT = EditorLayout.LINE_HEIGHT * 2;
+    EditorLayout.MIN_WINDOW_HEIGHT = 240;
+    EditorLayout.COMMAND_MARGIN = 36;
+    //EditorLayout.COMMAND_WIDTH = 300;
+
+    _.EditorLayout = EditorLayout;
 
     //==========================================================
         // Window_Hub
@@ -58,9 +82,22 @@ Imported.TY_FnHEquipSlotEditor = true;
     Window_Hub.prototype.initialize = function(x, y, width, height) {
         Window_Base.prototype.initialize.call(this, x, y, width, height);
 
-        //this.drawTitle();
-        //this.drawAuthor();
-        //this.drawVersion();
+        //this.drawList();
+    }
+
+    Window_Hub.prototype.drawList = function() {
+        this.clearContents();
+        this.drawTitle();
+        this.drawAuthor();
+        this.drawVersion();
+    }
+
+    /*Window_Hub.prototype.commandHeight = function() {
+        return Window_HubCommands.prototype.itemHeight.call(this) * _.windowHubCommands.length;
+    }*/
+
+    Window_Hub.prototype.shortLineHeight = function() {
+        return this.lineHeight() / 2 + 4;
     }
 
     Window_Hub.prototype.drawTitle = function() {
@@ -80,12 +117,10 @@ Imported.TY_FnHEquipSlotEditor = true;
 
     Window_Hub.prototype.drawAuthor = function() {
 
-        const padding = 4;
-
         const textArgs = {
             text: "By Toby Yasha",
             x: -this.padding,
-            y: this.height - (this.lineHeight() - padding) * 3,
+            y: this.height - this.commandHeight() - this.shortLineHeight() * 2,
             width: this.width,
             align: "center"
         }
@@ -100,7 +135,7 @@ Imported.TY_FnHEquipSlotEditor = true;
         const textArgs = {
             text: "v1.0.0",
             x: -this.padding,
-            y: this.height - this.lineHeight() * 2,
+            y: this.height - this.commandHeight() + this.shortLineHeight(),
             width: this.width,
             align: "center"
         }
@@ -128,25 +163,107 @@ Imported.TY_FnHEquipSlotEditor = true;
     Window_HubCommands.prototype = Object.create(Window_Command.prototype);
     Window_HubCommands.prototype.constructor = Window_HubCommands;
     
-    Window_HubCommands.prototype.initialize = function(x, y) {
-        Window_Command.prototype.initialize.call(this, x, y);
+    Window_HubCommands.prototype.initialize = function() {
+        Window_Command.prototype.initialize.call(this);
 
-        // could add this inside the "createContents" method
-        this._contentsBackSprite = new Sprite();
-        this._contentsBackSprite.bitmap = new Bitmap(this.contentsWidth(), this.contentsHeight());
-        this._windowSpriteContainer.addChild(this._contentsBackSprite);
+        this._hideFrame();
+    };
 
+    // should only update when the window is active
+    Window_HubCommands.prototype.update = function() {
+        if (!this.active) return;
+
+        Window_Command.prototype.update.call(this);
+    };
+
+    // should only update when the window is active
+    Window_HubCommands.prototype.updateTransform = function() {
+        if (!this.active) return;
+
+        Window_Command.prototype.updateTransform.call(this);
+    };
+
+    Window_HubCommands.prototype._hideFrame = function() {
         this._windowFrameSprite.visible = false;
         this.margin = 0;
+    }
 
-        this.refresh();
+    // the frame is hidden
+    Window_HubCommands.prototype._refreshFrame = function() { 
+        // deprecated 
+    };
+
+    // Based on MZ Code -- Window.prototype._refreshBack
+    Window_HubCommands.prototype._refreshBack = function() {
+        //const backgroundOffsetX = -1;
+        const backgroundOffsetX = 0;
+        const backgroundWidth = 96;
+        const backgroundHeight = 96;
+    
+        this._windowBackSprite.bitmap = this._windowskin;
+        this._windowBackSprite.setFrame(0, 0, backgroundWidth, backgroundHeight);
+        // [NOTE] There is an issue where artifacts on the sides of the window, 
+        // This is only noticeable when hiding a window's frame and reducing its margin to 0.
+        // To fix that, we add a tiny offset.
+        this._windowBackSprite.move(backgroundOffsetX, 0);
+        this._windowBackSprite.scale.x = this._width / backgroundWidth;
+        this._windowBackSprite.scale.y = this._height / backgroundHeight;
+        this._windowBackSprite.setColorTone(this._colorTone);
+    };
+
+    // we don't need this sprite
+    /*Window_HubCommands.prototype._updatePauseSign = function() {
+        // deprecated
+    }*/
+
+    // the game ignores scroll wheel inputs
+    Window_HubCommands.prototype.processWheel = function() {
+        // deprecated
+    };
+    
+    // the game ignores mouse inputs
+    Window_HubCommands.prototype.processTouch = function() {
+        // deprecated
+    };
+
+    Window_HubCommands.prototype.createContents = function() {
+        Window_Command.prototype.createContents.call(this);
+
+        this.createBackContents();
+    }
+
+    Window_HubCommands.prototype.createBackContents = function() {
+        const width = this.contentsWidth();
+        const height = this.contentsHeight();
+        const bitmap = new Bitmap(width, height);
+
+        this._contentsBackSprite = new Sprite(bitmap);
+        this._windowSpriteContainer.addChild(this._contentsBackSprite);
+    }
+
+    Window_HubCommands.prototype.standardPadding = function() {
+        return 0;
+    }
+
+    Window_HubCommands.prototype.itemHeight = function() {
+        return this.lineHeight() * 1.5;
+    };
+
+    Window_HubCommands.prototype.itemRectForText = function(index) {
+        let rect = Window_Command.prototype.itemRectForText.call(this, index);
+        rect.y += this.lineHeight() / 4;
+        return rect;
+    };
+
+    Window_HubCommands.prototype.windowHeight = function() {
+        const padding = 48;
+        return this.itemHeight() * (this.maxItems() + 1) - padding;
     };
 
     Window_HubCommands.prototype.makeCommandList = function() {
-        this.addCommand("Open", "open", true);
-        this.addCommand("Create", "create", true);
-        //this.addCommand("Options", "create", true);
-        this.addCommand("Exit", "exit", true);
+        for (const command of _.windowHubCommands) {
+            this.addCommand(command.name, command.symbol, true);
+        }
     };
 
     Window_HubCommands.prototype.refresh = function() {
@@ -181,46 +298,73 @@ Imported.TY_FnHEquipSlotEditor = true;
         return 'center';
     };
 
-    Window_HubCommands.prototype.windowWidth = function() {
-        return Graphics.width / 2.5;
-    }
-
-    Window_HubCommands.prototype.windowHeight = function() {
-        const padding = 32;
-        return this.itemHeight() * (this.maxItems() + 1) - padding;
-    };
-
-    Window_HubCommands.prototype.itemHeight = function() {
-        return this.lineHeight() * 1.5;
-    };
-
-    Window_HubCommands.prototype.standardPadding = function() {
-        return 0;
-    }
-
-    Window_HubCommands.prototype.itemRectForText = function(index) {
-        let rect = Window_Command.prototype.itemRectForText.call(this, index);
-        rect.y += this.lineHeight() / 4;
-        return rect;
-    };
-
-    Window_HubCommands.prototype._refreshBack = function() {
-        const backgroundOffsetX = -1;
-        const backgroundWidth = 96;
-        const backgroundHeight = 96;
-    
-        this._windowBackSprite.bitmap = this._windowskin;
-        this._windowBackSprite.setFrame(0, 0, backgroundWidth, backgroundHeight);
-        // [NOTE] There is an issue where artifacts on the sides of the window, 
-        // This is only noticeable when hiding a window's frame and reducing its margin to 0.
-        // To fix that, we add a tiny offset.
-        this._windowBackSprite.move(backgroundOffsetX, 0);
-        this._windowBackSprite.scale.x = this._width / backgroundWidth;
-        this._windowBackSprite.scale.y = this._height / backgroundHeight;
-        this._windowBackSprite.setColorTone(this._colorTone);
-    };
-
     _.Window_HubCommands = Window_HubCommands;
+
+    //==========================================================
+        // Hub Controller
+    //==========================================================
+
+    function HubController() {
+        this.initialize.apply(this, arguments);
+    }
+
+    HubController.prototype.initMembers = function() {
+        this._hubWindow = null;
+        this._hubCommandsWindow = null;
+    }
+
+    HubController.prototype.initialize = function() {
+        this.initMembers();
+        this.createHubWindow();
+        this.createHubCommands();
+    }
+
+    HubController.prototype.hubWindowRect = function() {
+        const width = Graphics.width / 2;
+        const height = (
+            EditorLayout.MIN_WINDOW_HEIGHT + 
+            EditorLayout.LINE_HEIGHT * 
+            _.windowHubCommands.length
+        ); // debating making this into a method inside the "EditorLayout"
+
+        return {
+            width,
+            height,
+            x: (Graphics.width - width) / 2,
+            y: (Graphics.height - height) / 2
+        };
+    }
+
+    HubController.prototype.hubCommandsWindowRect = function() {
+        const width = this._hubWindow.width - EditorLayout.COMMAND_MARGIN;
+
+        return {
+            width,
+            x: this._hubWindow.x + (this._hubWindow.width - width) / 2,
+            y: this._hubWindow.y + EditorLayout.TITLE_AREA_HEIGHT,
+        }
+    }
+
+    HubController.prototype.createHubWindow = function() {
+        const rect = this.hubWindowRect();
+
+        this._hubWindow = new Window_Hub(rect.x, rect.y, rect.width, rect.height);
+        _.addWindowToScene(this._hubWindow);
+    }
+
+    HubController.prototype.createHubCommands = function() {
+        const rect = this.hubCommandsWindowRect();
+
+        this._hubCommandsWindow = new Window_HubCommands();
+        this._hubCommandsWindow.x = rect.x;
+        this._hubCommandsWindow.y = rect.y;
+        this._hubCommandsWindow.width = rect.width;
+        this._hubCommandsWindow.refresh();
+        this._hubCommandsWindow.reselect();
+        _.addWindowToScene(this._hubCommandsWindow);
+    }
+
+    _.HubController = HubController;
 
     //==========================================================
         // Scene Editor
@@ -238,8 +382,7 @@ Imported.TY_FnHEquipSlotEditor = true;
     
         this.createBackground();
         this.createWindowLayer();
-        this.createHubWindow();
-        //this.createHubCommandsWindow();
+        this.createControllers();
     };
 
     Scene_Editor.prototype.createBackground = function() {
@@ -253,34 +396,8 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.addChild(this._backgroundSprite);
     }
 
-    Scene_Editor.prototype.createHubWindow = function() {
-
-        const padding = 16;
-        const itemHeight = 54;
-
-        const rect = {
-            x: 0,
-            y: 0,
-            width: Graphics.width / 2,
-            //height: Graphics.height / 2 + padding
-            height: 72 // lineHeight() * 2
-        };
-
-        this._hubWindow = new Window_Hub(...Object.values(rect));
-        this.addWindow(this._hubWindow);
-        _.centerOnScreen(this._hubWindow);
-    }
-
-    Scene_Editor.prototype.createHubCommandsWindow = function() {
-
-        const rect = {
-            x: 0,
-            y: 32,
-        };
-
-        this._hubCommandsWindow = new Window_HubCommands(...Object.values(rect));
-        this.addWindow(this._hubCommandsWindow);
-        _.centerInsideSprite(this._hubCommandsWindow, this._hubWindow);
+    Scene_Editor.prototype.createControllers = function() {
+        this._hubController = new HubController();
     }
 
     _.Scene_Editor = Scene_Editor;
@@ -291,45 +408,7 @@ Imported.TY_FnHEquipSlotEditor = true;
 
 })(TY.fnHEquipSlotEditor);
 
-
 /*
-
-Window_Command.prototype._refreshFrame = function() { //deprecated };
-
-*/
-
-
-
-/*
-
-Window.prototype.update = function() {
-    if (this.active) {
-        this._animationCount++;
-    }
-    this.children.forEach(function(child) { // children should only update if the window is active!
-        if (child.update) {
-            child.update();
-        }
-    });
-};
-
-// deprecate, not very useful here
-Window.prototype._updatePauseSign
-
-// should only update when the window is active
-Window.prototype.updateTransform = function() {
-    this._updateCursor();
-    this._updateArrows();
-    this._updatePauseSign();
-    this._updateContents();
-    PIXI.Container.prototype.updateTransform.call(this);
-};
-
-*/
-
-
-
-
 
 // ScreenSprite
 // Set opacity to 160
