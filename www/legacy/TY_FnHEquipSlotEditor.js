@@ -41,17 +41,10 @@ Imported.TY_FnHEquipSlotEditor = true;
     _.profileListCommands = [
         { name: "Default", symbol: "default" },
         { name: "Blender", symbol: "blender" },
+        { name: "Blender2", symbol: "blender2" },
+        { name: "Blender3", symbol: "blender3" },
         { name: "Cancel", symbol: "cancel" },
     ]
-
-    // needs a layer system or something
-    // because i'll need to place a ScreenSprite between or above windows
-
-    // maybe a "layerId" passed along the window object?
-    // and the scene decides which layer is active
-    _.addWindowToScene = function(win) {
-        SceneManager._scene.addWindow(win);
-    }
 
     //==========================================================
         // EditorLayout
@@ -64,6 +57,7 @@ Imported.TY_FnHEquipSlotEditor = true;
     EditorLayout.LINE_HEIGHT = 36;
     EditorLayout.HEADER_AREA_HEIGHT = EditorLayout.LINE_HEIGHT * 2;
     EditorLayout.FOOTER_AREA_HEIGHT = EditorLayout.LINE_HEIGHT * 1.5;
+    EditorLayout.PROFILE_AREA_HEIGHT = EditorLayout.LINE_HEIGHT * 6;
     EditorLayout.COMMAND_HEIGHT = EditorLayout.LINE_HEIGHT * 1.5;
     EditorLayout.COMMAND_MARGIN = 36;
     EditorLayout.PADDING = 16;
@@ -325,6 +319,58 @@ Imported.TY_FnHEquipSlotEditor = true;
     };
 
     //==========================================================
+        // EditorController
+    //==========================================================
+
+    function EditorController() {
+        this.initialize.apply(this, arguments);
+    }
+
+    EditorController.prototype.initialize = function() {
+        this._windows = [];
+        this.createMainWindow();
+        this.createCommandWindow();
+        this.refresh();
+    }
+
+    EditorController.prototype.registerWindow = function(win) {
+        win.hide();
+        win.deactivate();
+        SceneManager._scene.addWindow(win);
+        this._windows.push(win);
+    }
+
+    EditorController.prototype.createMainWindow = function() {
+        
+    }
+
+    EditorController.prototype.createCommandWindow = function() {
+        
+    }
+
+    EditorController.prototype.refresh = function() {
+
+    }
+
+    EditorController.prototype.activate = function() {
+        this._windows.forEach(win => win.activate());
+    }
+
+    EditorController.prototype.deactivate = function() {
+        this._windows.forEach(win => win.deactivate());
+    }
+
+    EditorController.prototype.show = function() {
+        this._windows.forEach(win => win.show());
+    }
+
+    EditorController.prototype.hide = function() {
+        this._windows.forEach(win => win.hide());
+    }
+
+    _.EditorController = EditorController;
+
+    //==========================================================
         // Window_Hub
     //==========================================================
 
@@ -381,17 +427,8 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.initialize.apply(this, arguments);
     }
 
-    HubController.prototype.initMembers = function() {
-        this._mainWindow = null;
-        this._commandWindow = null;
-    }
-
-    HubController.prototype.initialize = function() {
-        this.initMembers();
-        this.createMainWindow();
-        this.createCommandWindow();
-        this.refresh();
-    }
+    HubController.prototype = Object.create(EditorController.prototype);
+    HubController.prototype.constructor = HubController;
 
     HubController.prototype.mainWindowRect = function() {
         const width = Graphics.width / 2;
@@ -430,7 +467,7 @@ Imported.TY_FnHEquipSlotEditor = true;
         const rect = this.mainWindowRect();
 
         this._mainWindow = new Window_Hub(rect.x, rect.y, rect.width, rect.height);
-        _.addWindowToScene(this._mainWindow);
+        this.registerWindow(this._mainWindow);
     }
 
     HubController.prototype.createCommandWindow = function() {
@@ -439,7 +476,7 @@ Imported.TY_FnHEquipSlotEditor = true;
         this._commandWindow = new Window_HubCommands(rect.x, rect.y, rect.width);
         this._commandWindow.setHandler('open', this.openProfileList.bind(this));
         this._commandWindow.setHandler('exit', this.popScene.bind(this));
-        _.addWindowToScene(this._commandWindow);
+        this.registerWindow(this._commandWindow);
     }
 
     HubController.prototype.refresh = function() {
@@ -450,15 +487,6 @@ Imported.TY_FnHEquipSlotEditor = true;
 
     HubController.prototype.openProfileList = function() {
         SceneManager._scene.pushController("profileList");
-
-        /*SceneManager._scene._profileListController._mainWindow.show();
-        SceneManager._scene._profileListController._mainWindow.activate();
-        SceneManager._scene._profileListController._commandWindow.show();
-        SceneManager._scene._profileListController._commandWindow.activate();
-        this._mainWindow.hide();
-        this._mainWindow.deactivate();
-        this._commandWindow.hide();
-        this._commandWindow.deactivate();*/
     }
 
     HubController.prototype.popScene = function() {
@@ -483,12 +511,49 @@ Imported.TY_FnHEquipSlotEditor = true;
 
         const margin = 4;
 
+        ///
+
         this.changeTextColor(this.systemColor());
         this.contents.fontSize = this.standardFontSize();
+
         this.drawText(EditorStrings.get(EditorStrings.KEYS.PREVIEW), margin, this.lineHeight(), this.contentsWidth());
         this.drawHorizontalLine(this.lineHeight() * 2);
+
+        ///
+
+        this.changeTextColor(this.normalColor());
+        this.contents.fontSize = this.standardFontSize() - 4;
+
+        const lineSpacing = EditorLayout.PADDING * 2 - 4;
+
+        for (let i = 0, x = margin; i < 5; i++) { // maximum 5 equip slots per line
+
+            this.drawText("Weapon", x, this.lineHeight() * 2 + margin, this.contentsWidth());
+            this.drawText("Accessory", x, this.lineHeight() * 2 + margin + lineSpacing, this.contentsWidth());
+            x += this.textWidth("Accessory") + 24; // the highest width takes priority
+        }
+
+
+        ///
+
+        this.changeTextColor(this.systemColor());
+        this.contents.fontSize = this.standardFontSize();
+
         this.drawText(EditorStrings.get(EditorStrings.KEYS.ASSIGNED), margin, this.lineHeight() * 4, this.contentsWidth());
         this.drawHorizontalLine(this.lineHeight() * 5);
+
+        ///
+
+        this.changeTextColor(this.normalColor());
+        this.contents.fontSize = this.standardFontSize() - 4;
+
+        for (let i = 0, x = margin; i < 3; i++) {
+
+            this.drawText("Cahara", x, this.lineHeight() * 5 + 4, this.contentsWidth());
+            x += this.textWidth("Cahara") + 24;
+        }
+
+        ///
     }
 
     Window_ProfileList.prototype.drawTitle = function() {
@@ -506,6 +571,57 @@ Imported.TY_FnHEquipSlotEditor = true;
         const h = 4;
         this.contents.fillRect(x, y, w, h, "#403840");
     }
+
+    Window_ProfileList.prototype.drawSectionHeader = function(text, lineY) {
+        const margin = 4;
+
+        this.changeTextColor(this.systemColor());
+        this.contents.fontSize = this.standardFontSize();
+
+        this.drawText(text, margin, this.lineHeight() * lineY, this.contentsWidth());
+        this.drawHorizontalLine(this.lineHeight() * (lineY + 1));
+    }
+
+    Window_ProfileList.prototype.drawPreviewHeader = function() {
+        const text = EditorStrings.get(EditorStrings.KEYS.PREVIEW);
+        const lineY = 2;
+        this.drawSectionHeader(text, lineY);
+    }
+
+    Window_ProfileList.prototype.drawPreviewContents = function() {
+        this.changeTextColor(this.normalColor());
+        this.contents.fontSize = this.standardFontSize() - 4;
+
+        const lineSpacing = EditorLayout.PADDING * 2 - 4;
+
+        for (let i = 0, x = margin; i < 5; i++) { // maximum 5 equip slots per line
+
+            this.drawText("Weapon", x, this.lineHeight() * 2 + margin, this.contentsWidth());
+            this.drawText("Accessory", x, this.lineHeight() * 2 + margin + lineSpacing, this.contentsWidth());
+            x += this.textWidth("Accessory") + 24; // the highest width takes priority
+        }
+    }
+
+    Window_ProfileList.prototype.drawAssignedHeader = function() {
+        this.changeTextColor(this.systemColor());
+        this.contents.fontSize = this.standardFontSize();
+
+        this.drawText(EditorStrings.get(EditorStrings.KEYS.ASSIGNED), margin, this.lineHeight() * 4, this.contentsWidth());
+        this.drawHorizontalLine(this.lineHeight() * 5);
+    }
+
+    Window_ProfileList.prototype.drawAssignedContents = function() {
+        this.changeTextColor(this.normalColor());
+        this.contents.fontSize = this.standardFontSize() - 4;
+
+        for (let i = 0, x = margin; i < 3; i++) {
+
+            this.drawText("Cahara", x, this.lineHeight() * 5 + 4, this.contentsWidth());
+            x += this.textWidth("Cahara") + 24;
+        }
+    }
+
+    _.Window_ProfileList = Window_ProfileList;
 
     //==========================================================
         // Window_ProfileListCommands
@@ -534,28 +650,26 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.initialize.apply(this, arguments);
     }
 
-    ProfileListController.prototype.initMembers = function() {
-        this._mainWindow = null;
-        this._commandWindow = null;
-    }
-
-    ProfileListController.prototype.initialize = function() {
-        this.initMembers();
-        this.createMainWindow();
-        this.createCommandWindow();
-        this.refresh();
-    }
+    ProfileListController.prototype = Object.create(EditorController.prototype);
+    ProfileListController.prototype.constructor = ProfileListController;
 
     ProfileListController.prototype.mainWindowRect = function() {
         const width = Graphics.width * 0.9;
 
+        const commandCount = Math.floor(_.profileListCommands.length / 2);
         const commandHeight = (
             EditorLayout.COMMAND_HEIGHT * 
-            (_.profileListCommands.length / 2)
+            commandCount
         );
 
-        const height = Graphics.height / 2 + commandHeight;
-        //const height = Graphics.height * 0.9;
+        const height = (
+            EditorLayout.HEADER_AREA_HEIGHT +
+            EditorLayout.PROFILE_AREA_HEIGHT +
+            //commandHeight +
+            EditorLayout.PADDING
+        );
+
+        //const height = Graphics.height / 2 + commandHeight;
 
         return {
             width,
@@ -575,7 +689,8 @@ Imported.TY_FnHEquipSlotEditor = true;
         return {
             width,
             x: this._mainWindow.x + (this._mainWindow.width - width) / 2,
-            y: this._mainWindow.height - commandHeight + EditorLayout.PADDING
+            y: this._mainWindow.y + EditorLayout.HEADER_AREA_HEIGHT + EditorLayout.PROFILE_AREA_HEIGHT + EditorLayout.PADDING
+            //y: this._mainWindow.height - commandHeight + EditorLayout.PADDING
         }
     }
 
@@ -583,19 +698,14 @@ Imported.TY_FnHEquipSlotEditor = true;
         const rect = this.mainWindowRect();
 
         this._mainWindow = new Window_ProfileList(rect.x, rect.y, rect.width, rect.height);
-        this._mainWindow.deactivate();
-        this._mainWindow.hide();
-        _.addWindowToScene(this._mainWindow);
+        this.registerWindow(this._mainWindow);
     }
 
     ProfileListController.prototype.createCommandWindow = function() {
-        const rect = this.commandWindowRect();
+        /*const rect = this.commandWindowRect();
 
         this._commandWindow = new Window_ProfileListCommands(rect.x, rect.y, rect.width);
-        //this._commandWindow.setHandler('cancel', this.popScene.bind(this));
-        this._commandWindow.deactivate();
-        this._commandWindow.hide();
-        _.addWindowToScene(this._commandWindow);
+        this.registerWindow(this._commandWindow);*/
     }
 
     ProfileListController.prototype.refresh = function() {
@@ -639,6 +749,8 @@ Imported.TY_FnHEquipSlotEditor = true;
             hub: new HubController(),
             profileList: new ProfileListController(),
         }
+
+        this.pushController("hub");
     }
 
     Scene_Editor.prototype.pushController = function(type) {
@@ -664,7 +776,7 @@ Imported.TY_FnHEquipSlotEditor = true;
 
         if (index < 0) return;
 
-        const controller = this._controllerLayers[index];
+        let controller = this._controllerLayers[index];
         controller.deactivate();
         controller.hide();
 
@@ -674,7 +786,7 @@ Imported.TY_FnHEquipSlotEditor = true;
 
         if (index < 0) return;
 
-        const controller = this._controllerLayers[index];
+        controller = this._controllerLayers[index];
         controller.activate();
     }
 
