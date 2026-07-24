@@ -26,22 +26,23 @@ Imported.TY_FnHEquipSlotEditor = true;
         // Utility Methods
     //==========================================================
 
+    // TODO: Make the name come from the localization
     _.windowHubCommands = [
         { name: "Open", symbol: "open" },
         { name: "Create", symbol: "create" },
-        { name: "Options", symbol: "options" },
+        //{ name: "Options", symbol: "options" },
+        //{ name: "Help", symbol: "help" },
+        //{ name: "Others", symbol: "others" },
+        //{ name: "Music", symbol: "music" },
+        //{ name: "Squid", symbol: "squid" },
         { name: "Exit", symbol: "exit" },
     ]
 
-    _.centerOnScreen = function(sprite) {
-        sprite.x = (Graphics.width - sprite.width) / 2;
-        sprite.y = (Graphics.height - sprite.height) / 2;
-    }
-
-    _.centerInsideSprite = function(child, parent) {
-        child.x = parent.x + (parent.width - child.width) / 2;
-        child.y = parent.y + (parent.height - child.height) / 2;
-    }
+    _.profileListCommands = [
+        { name: "Default", symbol: "default" },
+        { name: "Blender", symbol: "blender" },
+        { name: "Cancel", symbol: "cancel" },
+    ]
 
     // needs a layer system or something
     // because i'll need to place a ScreenSprite between or above windows
@@ -61,12 +62,267 @@ Imported.TY_FnHEquipSlotEditor = true;
     }
 
     EditorLayout.LINE_HEIGHT = 36;
-    EditorLayout.TITLE_AREA_HEIGHT = EditorLayout.LINE_HEIGHT * 2;
-    EditorLayout.MIN_WINDOW_HEIGHT = 240;
+    EditorLayout.HEADER_AREA_HEIGHT = EditorLayout.LINE_HEIGHT * 2;
+    EditorLayout.FOOTER_AREA_HEIGHT = EditorLayout.LINE_HEIGHT * 1.5;
+    EditorLayout.COMMAND_HEIGHT = EditorLayout.LINE_HEIGHT * 1.5;
     EditorLayout.COMMAND_MARGIN = 36;
-    //EditorLayout.COMMAND_WIDTH = 300;
+    EditorLayout.PADDING = 16;
 
     _.EditorLayout = EditorLayout;
+
+    //==========================================================
+        // EditorStrings
+    //==========================================================
+
+    function EditorStrings() {
+        throw new Error("This is a static class");
+    }
+
+    EditorStrings._defaultLocale = "EN";
+    EditorStrings._currentLocale = "EN";
+
+    EditorStrings.AUTHOR = "By Toby Yasha";
+    EditorStrings.VERSION = "v1.0.0";
+
+    EditorStrings.KEYS = {
+        HUB_TITLE: "hub_title",
+        OPEN: "open",
+        CREATE: "create",
+        EXIT: "exit",
+        PROFILE_LIST_TITLE: "profile_list_title",
+        PREVIEW: "preview",
+        ASSIGNED: "assigned",
+        PROFILE_EDITOR_TITLE: "profile_editor_title",
+        EQUIP_SLOTS: "equip_slots",
+        ADD: "add",
+        REMOVE: "remove",
+        MOVE: "move",
+        SAVE: "save",
+        HELP: "help",
+        CANCEL: "cancel",
+        
+    }
+
+    EditorStrings.LOCALES = {
+        EN: {
+            hub_title: "Equip Slot Editor",
+            open: "Open",
+            create: "Create",
+            exit: "Exit",
+            profile_list_title: "Profile List",
+            preview: "Preview",
+            assigned: "Assigned",
+            profile_editor_title: "Profile Editor",
+            equip_slots: "Equip Slots",
+            add: "Add",
+            remove: "Remove",
+            move: "Move",
+            save: "Save",
+            help: "Help",
+            cancel: "Cancel",
+        }
+    }
+
+    EditorStrings.setLocale = function(locale) {
+        if (!EditorStrings.LOCALES.hasOwnProperty(locale)) {
+            console.warn(`TY_FnHEquipSlotEditor - Locale: ${locale} is not valid!`);
+            return;
+        }
+
+        EditorStrings._currentLocale = locale;
+    }
+
+    EditorStrings.get = function(key) {
+        return (
+            EditorStrings.LOCALES[EditorStrings._currentLocale][key] || 
+            EditorStrings.LOCALES[EditorStrings._defaultLocale][key]
+        );
+    }
+
+    _.EditorStrings = EditorStrings;
+
+    //==========================================================
+        // Window_EditorBase
+    //==========================================================
+
+    function Window_EditorBase() {
+        this.initialize.apply(this, arguments);
+    }
+    
+    Window_EditorBase.prototype = Object.create(Window_Base.prototype);
+    Window_EditorBase.prototype.constructor = Window_EditorBase;
+
+    Window_EditorBase.prototype.drawCenteredLabel = function(text, y, fontSize) {
+        this.changeTextColor(this.systemColor());
+        this.contents.fontSize = fontSize;
+    
+        this.drawText(
+            text,
+            -this.padding,
+            y,
+            this.width,
+            "center"
+        );
+    };
+
+    Window_EditorBase.prototype.drawTitle = function(text) {
+        const fontSize = this.standardFontSize() + 6;
+        this.drawCenteredLabel(text, 0, fontSize);
+    };
+
+    _.Window_EditorBase = Window_EditorBase;
+
+    //==========================================================
+        // Window_EditorCommandBase
+    //==========================================================
+
+    function Window_EditorCommandBase() {
+        this.initialize.apply(this, arguments);
+    }
+    
+    Window_EditorCommandBase.prototype = Object.create(Window_Command.prototype);
+    Window_EditorCommandBase.prototype.constructor = Window_EditorCommandBase;
+    
+    Window_EditorCommandBase.prototype.initialize = function(x, y, width) {
+        Window_Command.prototype.initialize.call(this);
+
+        this._hideFrame();
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.refresh();
+        this.reselect();
+    };
+
+    // should only update when the window is active
+    Window_EditorCommandBase.prototype.update = function() {
+        if (!this.active) return;
+
+        Window_Command.prototype.update.call(this);
+    };
+
+    // should only update when the window is active
+    Window_EditorCommandBase.prototype.updateTransform = function() {
+        if (!this.active) return;
+
+        Window_Command.prototype.updateTransform.call(this);
+    };
+
+    Window_EditorCommandBase.prototype._hideFrame = function() {
+        this._windowFrameSprite.visible = false;
+        this.margin = 0;
+    }
+
+    /**
+     * @deprecated the frame is hidden
+     */
+    Window_EditorCommandBase.prototype._refreshFrame = function() {};
+
+    /**
+     * [NOTE] The original MV implementation may produce edge artifacts when the
+     * window frame is hidden and the margin is set to 0. The code below only 
+     * partially fixes the issue. 
+     * 
+     * Implementation based on MZ Code -- Window.prototype._refreshBack
+     */
+    Window_EditorCommandBase.prototype._refreshBack = function() {
+        const backgroundWidth = 96;
+        const backgroundHeight = 96;
+    
+        this._windowBackSprite.bitmap = this._windowskin;
+        this._windowBackSprite.setFrame(0, 0, backgroundWidth, backgroundHeight);
+        this._windowBackSprite.scale.x = this._width / backgroundWidth;
+        this._windowBackSprite.scale.y = this._height / backgroundHeight;
+        this._windowBackSprite.setColorTone(this._colorTone);
+    };
+
+    /**
+     * @deprecated the game ignores scroll wheel inputs
+     */
+    Window_EditorCommandBase.prototype.processWheel = function() {};
+    
+    /**
+     * @deprecated the game ignores mouse inputs
+     */
+    Window_EditorCommandBase.prototype.processTouch = function() {};
+
+    Window_EditorCommandBase.prototype.createContents = function() {
+        Window_Command.prototype.createContents.call(this);
+
+        this.createBackContents();
+    }
+
+    Window_EditorCommandBase.prototype.createBackContents = function() {
+        const width = this.contentsWidth();
+        const height = this.contentsHeight();
+        const bitmap = new Bitmap(width, height);
+
+        this._contentsBackSprite = new Sprite(bitmap);
+        this._windowSpriteContainer.addChild(this._contentsBackSprite);
+    }
+
+    Window_EditorCommandBase.prototype.standardPadding = function() {
+        return 0;
+    }
+
+    Window_EditorCommandBase.prototype.fittingHeight = function(numLines) {
+        const padding = 6;
+        return numLines * this.itemHeight() + padding;
+    };
+
+    Window_EditorCommandBase.prototype.itemHeight = function() {
+        return EditorLayout.COMMAND_HEIGHT;
+    };
+
+    Window_EditorCommandBase.prototype.itemRectForText = function(index) {
+        let rect = Window_Command.prototype.itemRectForText.call(this, index);
+        rect.y += this.lineHeight() / 4;
+        return rect;
+    };
+
+    Window_EditorCommandBase.prototype.drawItem = function(index) {
+        Window_Command.prototype.drawItem.call(this, index);
+
+        const rect = this.itemRect(index);
+        const color = this.backgroundRectColor(index);
+        this.drawBackgroundRect(rect, color);
+    };
+
+    Window_EditorCommandBase.prototype.backgroundRectColor = function(index) {
+        return "#403840";
+    }
+
+    Window_EditorCommandBase.prototype.drawBackgroundRect = function(rect, color) {
+        if (!this._contentsBackSprite) return;
+
+        const margin = 8;
+        const x = rect.x + margin / 2;
+        const y = rect.y + margin / 2;
+        const w = rect.width - margin;
+        const h = rect.height - margin;
+        this._contentsBackSprite.bitmap.fillRect(x, y, w, h, color);
+    };
+
+    Window_EditorCommandBase.prototype.itemTextAlign = function() {
+        return 'center';
+    };
+
+    _.Window_EditorCommandBase = Window_EditorCommandBase;
+
+    //==========================================================
+        // Window_EditorHorzCommand
+    //==========================================================
+
+    function Window_EditorHorzCommand() {
+        this.initialize.apply(this, arguments);
+    }
+    
+    Window_EditorHorzCommand.prototype = Object.create(Window_EditorCommandBase.prototype);
+    Window_EditorHorzCommand.prototype.constructor = Window_EditorHorzCommand;
+    
+    Window_EditorHorzCommand.prototype.maxCols = function() {
+        return 2;
+    };
 
     //==========================================================
         // Window_Hub
@@ -76,78 +332,24 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.initialize.apply(this, arguments);
     }
     
-    Window_Hub.prototype = Object.create(Window_Base.prototype);
+    Window_Hub.prototype = Object.create(Window_EditorBase.prototype);
     Window_Hub.prototype.constructor = Window_Hub;
 
-    Window_Hub.prototype.initialize = function(x, y, width, height) {
-        Window_Base.prototype.initialize.call(this, x, y, width, height);
-
-        //this.drawList();
-    }
-
-    Window_Hub.prototype.drawList = function() {
-        this.clearContents();
-        this.drawTitle();
-        this.drawAuthor();
-        this.drawVersion();
-    }
-
-    /*Window_Hub.prototype.commandHeight = function() {
-        return Window_HubCommands.prototype.itemHeight.call(this) * _.windowHubCommands.length;
-    }*/
-
-    Window_Hub.prototype.shortLineHeight = function() {
-        return this.lineHeight() / 2 + 4;
-    }
-
     Window_Hub.prototype.drawTitle = function() {
+        const text = EditorStrings.get(EditorStrings.KEYS.HUB_TITLE);
 
-        const textArgs = {
-            text: "Equip Slot Editor",
-            x: -this.padding,
-            y: 0,
-            width: this.width,
-            align: "center"
-        }
+        Window_EditorBase.prototype.drawTitle.call(this, text);
+    };
 
-        this.changeTextColor(this.systemColor());
-        this.contents.fontSize = this.standardFontSize() + 6;
-        this.drawText(...Object.values(textArgs));
-    }
+    Window_Hub.prototype.drawFooter = function(commandHeight) {
+        const fontSize = this.standardFontSize() - 8;
 
-    Window_Hub.prototype.drawAuthor = function() {
-
-        const textArgs = {
-            text: "By Toby Yasha",
-            x: -this.padding,
-            y: this.height - this.commandHeight() - this.shortLineHeight() * 2,
-            width: this.width,
-            align: "center"
-        }
-
-        this.changeTextColor(this.systemColor());
-        this.contents.fontSize = this.standardFontSize() - 8;
-        this.drawText(...Object.values(textArgs));
-    }
-
-    Window_Hub.prototype.drawVersion = function() {
-
-        const textArgs = {
-            text: "v1.0.0",
-            x: -this.padding,
-            y: this.height - this.commandHeight() + this.shortLineHeight(),
-            width: this.width,
-            align: "center"
-        }
-
-        this.changeTextColor(this.systemColor());
-        this.contents.fontSize = this.standardFontSize() - 8;
-        this.drawText(...Object.values(textArgs));
-    }
-
-    Window_Hub.prototype.clearContents = function() {
-        this.contents.clear();
-        this.createContents(); // temporarily added here
+        const footerY = commandHeight + 48; // TODO: Figure out why "48" works here
+        const footerLineSpacing = this.lineHeight() / 2 + 4;
+        const footerY2 = footerY + footerLineSpacing;
+    
+        this.drawCenteredLabel(EditorStrings.AUTHOR, footerY, fontSize);
+        this.drawCenteredLabel(EditorStrings.VERSION, footerY2, fontSize);
     }
 
     _.Window_Hub = Window_Hub;
@@ -160,105 +362,8 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.initialize.apply(this, arguments);
     }
     
-    Window_HubCommands.prototype = Object.create(Window_Command.prototype);
+    Window_HubCommands.prototype = Object.create(Window_EditorCommandBase.prototype);
     Window_HubCommands.prototype.constructor = Window_HubCommands;
-    
-    Window_HubCommands.prototype.initialize = function() {
-        Window_Command.prototype.initialize.call(this);
-
-        this._hideFrame();
-    };
-
-    // should only update when the window is active
-    Window_HubCommands.prototype.update = function() {
-        if (!this.active) return;
-
-        Window_Command.prototype.update.call(this);
-    };
-
-    // should only update when the window is active
-    Window_HubCommands.prototype.updateTransform = function() {
-        if (!this.active) return;
-
-        Window_Command.prototype.updateTransform.call(this);
-    };
-
-    Window_HubCommands.prototype._hideFrame = function() {
-        this._windowFrameSprite.visible = false;
-        this.margin = 0;
-    }
-
-    // the frame is hidden
-    Window_HubCommands.prototype._refreshFrame = function() { 
-        // deprecated 
-    };
-
-    // Based on MZ Code -- Window.prototype._refreshBack
-    Window_HubCommands.prototype._refreshBack = function() {
-        //const backgroundOffsetX = -1;
-        const backgroundOffsetX = 0;
-        const backgroundWidth = 96;
-        const backgroundHeight = 96;
-    
-        this._windowBackSprite.bitmap = this._windowskin;
-        this._windowBackSprite.setFrame(0, 0, backgroundWidth, backgroundHeight);
-        // [NOTE] There is an issue where artifacts on the sides of the window, 
-        // This is only noticeable when hiding a window's frame and reducing its margin to 0.
-        // To fix that, we add a tiny offset.
-        this._windowBackSprite.move(backgroundOffsetX, 0);
-        this._windowBackSprite.scale.x = this._width / backgroundWidth;
-        this._windowBackSprite.scale.y = this._height / backgroundHeight;
-        this._windowBackSprite.setColorTone(this._colorTone);
-    };
-
-    // we don't need this sprite
-    /*Window_HubCommands.prototype._updatePauseSign = function() {
-        // deprecated
-    }*/
-
-    // the game ignores scroll wheel inputs
-    Window_HubCommands.prototype.processWheel = function() {
-        // deprecated
-    };
-    
-    // the game ignores mouse inputs
-    Window_HubCommands.prototype.processTouch = function() {
-        // deprecated
-    };
-
-    Window_HubCommands.prototype.createContents = function() {
-        Window_Command.prototype.createContents.call(this);
-
-        this.createBackContents();
-    }
-
-    Window_HubCommands.prototype.createBackContents = function() {
-        const width = this.contentsWidth();
-        const height = this.contentsHeight();
-        const bitmap = new Bitmap(width, height);
-
-        this._contentsBackSprite = new Sprite(bitmap);
-        this._windowSpriteContainer.addChild(this._contentsBackSprite);
-    }
-
-    Window_HubCommands.prototype.standardPadding = function() {
-        return 0;
-    }
-
-    Window_HubCommands.prototype.itemHeight = function() {
-        return this.lineHeight() * 1.5;
-    };
-
-    Window_HubCommands.prototype.itemRectForText = function(index) {
-        let rect = Window_Command.prototype.itemRectForText.call(this, index);
-        rect.y += this.lineHeight() / 4;
-        return rect;
-    };
-
-    Window_HubCommands.prototype.windowHeight = function() {
-        const padding = 48;
-        return this.itemHeight() * (this.maxItems() + 1) - padding;
-    };
 
     Window_HubCommands.prototype.makeCommandList = function() {
         for (const command of _.windowHubCommands) {
@@ -266,42 +371,10 @@ Imported.TY_FnHEquipSlotEditor = true;
         }
     };
 
-    Window_HubCommands.prototype.refresh = function() {
-        if (this._contentsBackSprite) {
-            this._contentsBackSprite.bitmap.clear();
-        }
-
-        Window_Command.prototype.refresh.call(this);
-    };
-
-    Window_HubCommands.prototype.drawItem = function(index) {
-        Window_Command.prototype.drawItem.call(this, index);
-
-        const rect = this.itemRect(index);
-        this.drawBackgroundRect(rect);
-    };
-
-    Window_HubCommands.prototype.drawBackgroundRect = function(rect) {
-        if (!this._contentsBackSprite) return;
-
-        const margin = 8;
-
-        const c = "#403840";
-        const x = rect.x + margin / 2;
-        const y = rect.y + margin / 2;
-        const w = rect.width - margin;
-        const h = rect.height - margin;
-        this._contentsBackSprite.bitmap.fillRect(x, y, w, h, c);
-    };
-
-    Window_HubCommands.prototype.itemTextAlign = function() {
-        return 'center';
-    };
-
     _.Window_HubCommands = Window_HubCommands;
 
     //==========================================================
-        // Hub Controller
+        // HubController
     //==========================================================
 
     function HubController() {
@@ -309,23 +382,31 @@ Imported.TY_FnHEquipSlotEditor = true;
     }
 
     HubController.prototype.initMembers = function() {
-        this._hubWindow = null;
-        this._hubCommandsWindow = null;
+        this._mainWindow = null;
+        this._commandWindow = null;
     }
 
     HubController.prototype.initialize = function() {
         this.initMembers();
-        this.createHubWindow();
-        this.createHubCommands();
+        this.createMainWindow();
+        this.createCommandWindow();
+        this.refresh();
     }
 
-    HubController.prototype.hubWindowRect = function() {
+    HubController.prototype.mainWindowRect = function() {
         const width = Graphics.width / 2;
-        const height = (
-            EditorLayout.MIN_WINDOW_HEIGHT + 
-            EditorLayout.LINE_HEIGHT * 
+
+        const commandHeight = (
+            EditorLayout.COMMAND_HEIGHT * 
             _.windowHubCommands.length
-        ); // debating making this into a method inside the "EditorLayout"
+        );
+
+        const height = (
+            EditorLayout.HEADER_AREA_HEIGHT + 
+            commandHeight + 
+            EditorLayout.FOOTER_AREA_HEIGHT + 
+            EditorLayout.PADDING
+        );
 
         return {
             width,
@@ -335,39 +416,194 @@ Imported.TY_FnHEquipSlotEditor = true;
         };
     }
 
-    HubController.prototype.hubCommandsWindowRect = function() {
-        const width = this._hubWindow.width - EditorLayout.COMMAND_MARGIN;
+    HubController.prototype.commandWindowRect = function() {
+        const width = this._mainWindow.width - EditorLayout.COMMAND_MARGIN;
 
         return {
             width,
-            x: this._hubWindow.x + (this._hubWindow.width - width) / 2,
-            y: this._hubWindow.y + EditorLayout.TITLE_AREA_HEIGHT,
+            x: this._mainWindow.x + (this._mainWindow.width - width) / 2,
+            y: this._mainWindow.y + EditorLayout.HEADER_AREA_HEIGHT
         }
     }
 
-    HubController.prototype.createHubWindow = function() {
-        const rect = this.hubWindowRect();
+    HubController.prototype.createMainWindow = function() {
+        const rect = this.mainWindowRect();
 
-        this._hubWindow = new Window_Hub(rect.x, rect.y, rect.width, rect.height);
-        _.addWindowToScene(this._hubWindow);
+        this._mainWindow = new Window_Hub(rect.x, rect.y, rect.width, rect.height);
+        _.addWindowToScene(this._mainWindow);
     }
 
-    HubController.prototype.createHubCommands = function() {
-        const rect = this.hubCommandsWindowRect();
+    HubController.prototype.createCommandWindow = function() {
+        const rect = this.commandWindowRect();
 
-        this._hubCommandsWindow = new Window_HubCommands();
-        this._hubCommandsWindow.x = rect.x;
-        this._hubCommandsWindow.y = rect.y;
-        this._hubCommandsWindow.width = rect.width;
-        this._hubCommandsWindow.refresh();
-        this._hubCommandsWindow.reselect();
-        _.addWindowToScene(this._hubCommandsWindow);
+        this._commandWindow = new Window_HubCommands(rect.x, rect.y, rect.width);
+        this._commandWindow.setHandler('open', this.openProfileList.bind(this));
+        this._commandWindow.setHandler('exit', this.popScene.bind(this));
+        _.addWindowToScene(this._commandWindow);
+    }
+
+    HubController.prototype.refresh = function() {
+        const commandHeight = this._commandWindow.height;
+        this._mainWindow.drawTitle();
+        this._mainWindow.drawFooter(commandHeight);
+    }
+
+    HubController.prototype.openProfileList = function() {
+        SceneManager._scene.pushController("profileList");
+
+        /*SceneManager._scene._profileListController._mainWindow.show();
+        SceneManager._scene._profileListController._mainWindow.activate();
+        SceneManager._scene._profileListController._commandWindow.show();
+        SceneManager._scene._profileListController._commandWindow.activate();
+        this._mainWindow.hide();
+        this._mainWindow.deactivate();
+        this._commandWindow.hide();
+        this._commandWindow.deactivate();*/
+    }
+
+    HubController.prototype.popScene = function() {
+        SceneManager.pop();
     }
 
     _.HubController = HubController;
 
     //==========================================================
-        // Scene Editor
+        // Window_ProfileList
+    //==========================================================
+
+    function Window_ProfileList() {
+        this.initialize.apply(this, arguments);
+    }
+    
+    Window_ProfileList.prototype = Object.create(Window_EditorBase.prototype);
+    Window_ProfileList.prototype.constructor = Window_ProfileList;
+
+    Window_ProfileList.prototype.drawLayout = function() {
+        this.drawTitle();
+
+        const margin = 4;
+
+        this.changeTextColor(this.systemColor());
+        this.contents.fontSize = this.standardFontSize();
+        this.drawText(EditorStrings.get(EditorStrings.KEYS.PREVIEW), margin, this.lineHeight(), this.contentsWidth());
+        this.drawHorizontalLine(this.lineHeight() * 2);
+        this.drawText(EditorStrings.get(EditorStrings.KEYS.ASSIGNED), margin, this.lineHeight() * 4, this.contentsWidth());
+        this.drawHorizontalLine(this.lineHeight() * 5);
+    }
+
+    Window_ProfileList.prototype.drawTitle = function() {
+        const text = EditorStrings.get(EditorStrings.KEYS.PROFILE_LIST_TITLE);
+
+        Window_EditorBase.prototype.drawTitle.call(this, text);
+    };
+
+    Window_ProfileList.prototype.drawHorizontalLine = function(lineY) {
+
+        const margin = 4;
+        const x = margin / 2;
+        const y = lineY + margin / 2;
+        const w = this.contentsWidth() - margin;
+        const h = 4;
+        this.contents.fillRect(x, y, w, h, "#403840");
+    }
+
+    //==========================================================
+        // Window_ProfileListCommands
+    //==========================================================
+
+    function Window_ProfileListCommands() {
+        this.initialize.apply(this, arguments);
+    }
+    
+    Window_ProfileListCommands.prototype = Object.create(Window_EditorHorzCommand.prototype);
+    Window_ProfileListCommands.prototype.constructor = Window_ProfileListCommands;
+
+    Window_ProfileListCommands.prototype.makeCommandList = function() {
+        for (const command of _.profileListCommands) {
+            this.addCommand(command.name, command.symbol, true);
+        }
+    };
+
+    _.Window_ProfileListCommands = Window_ProfileListCommands;
+
+    //==========================================================
+        // ProfileListController
+    //==========================================================
+
+    function ProfileListController() {
+        this.initialize.apply(this, arguments);
+    }
+
+    ProfileListController.prototype.initMembers = function() {
+        this._mainWindow = null;
+        this._commandWindow = null;
+    }
+
+    ProfileListController.prototype.initialize = function() {
+        this.initMembers();
+        this.createMainWindow();
+        this.createCommandWindow();
+        this.refresh();
+    }
+
+    ProfileListController.prototype.mainWindowRect = function() {
+        const width = Graphics.width * 0.9;
+
+        const commandHeight = (
+            EditorLayout.COMMAND_HEIGHT * 
+            (_.profileListCommands.length / 2)
+        );
+
+        const height = Graphics.height / 2 + commandHeight;
+        //const height = Graphics.height * 0.9;
+
+        return {
+            width,
+            height,
+            x: (Graphics.width - width) / 2,
+            y: (Graphics.height - height) / 2
+        };
+    }
+
+    ProfileListController.prototype.commandWindowRect = function() {
+        const width = this._mainWindow.width - EditorLayout.COMMAND_MARGIN;
+        const commandHeight = (
+            EditorLayout.COMMAND_HEIGHT * 
+            _.windowHubCommands.length
+        );
+
+        return {
+            width,
+            x: this._mainWindow.x + (this._mainWindow.width - width) / 2,
+            y: this._mainWindow.height - commandHeight + EditorLayout.PADDING
+        }
+    }
+
+    ProfileListController.prototype.createMainWindow = function() {
+        const rect = this.mainWindowRect();
+
+        this._mainWindow = new Window_ProfileList(rect.x, rect.y, rect.width, rect.height);
+        this._mainWindow.deactivate();
+        this._mainWindow.hide();
+        _.addWindowToScene(this._mainWindow);
+    }
+
+    ProfileListController.prototype.createCommandWindow = function() {
+        const rect = this.commandWindowRect();
+
+        this._commandWindow = new Window_ProfileListCommands(rect.x, rect.y, rect.width);
+        //this._commandWindow.setHandler('cancel', this.popScene.bind(this));
+        this._commandWindow.deactivate();
+        this._commandWindow.hide();
+        _.addWindowToScene(this._commandWindow);
+    }
+
+    ProfileListController.prototype.refresh = function() {
+        this._mainWindow.drawLayout();
+    }
+
+    //==========================================================
+        // Scene_Editor
     //==========================================================
 
     function Scene_Editor() {
@@ -379,6 +615,8 @@ Imported.TY_FnHEquipSlotEditor = true;
 
     Scene_Editor.prototype.create = function() {
         Scene_Base.prototype.create.call(this);
+
+        this._controllerLayers = [];
     
         this.createBackground();
         this.createWindowLayer();
@@ -397,7 +635,47 @@ Imported.TY_FnHEquipSlotEditor = true;
     }
 
     Scene_Editor.prototype.createControllers = function() {
-        this._hubController = new HubController();
+        this._controllers = {
+            hub: new HubController(),
+            profileList: new ProfileListController(),
+        }
+    }
+
+    Scene_Editor.prototype.pushController = function(type) {
+        const controller = this._controllers[type];
+
+        if (!controller) return;
+
+        const index = this._controllerLayers.length - 1;
+
+        if (index >= 0) {
+            const prevLayer = this._controllerLayers[index];
+            prevLayer.deactivate();
+        }
+
+        controller.activate();
+        controller.show();
+
+        this._controllerLayers.push(controller);
+    }
+
+    Scene_Editor.prototype.popController = function() {
+        let index = this._controllerLayers.length - 1;
+
+        if (index < 0) return;
+
+        const controller = this._controllerLayers[index];
+        controller.deactivate();
+        controller.hide();
+
+        this._controllerLayers.splice(index, 1);
+
+        index = this._controllerLayers.length - 1;
+
+        if (index < 0) return;
+
+        const controller = this._controllerLayers[index];
+        controller.activate();
     }
 
     _.Scene_Editor = Scene_Editor;
@@ -422,38 +700,6 @@ Imported.TY_FnHEquipSlotEditor = true;
 
 //Scene_Save.prototype.onSaveSuccess -- before saving, disable the mod's functionality and backup its data, then re-enable it
 //Scene_Load.prototype.onLoadSuccess -- if there exists saved mod data restore it here
-
-
-
-
-/*
-function Window_HorzCommand() {
-    this.initialize.apply(this, arguments);
-}
-
-Window_HorzCommand.prototype = Object.create(Window_Command.prototype);
-Window_HorzCommand.prototype.constructor = Window_HorzCommand;
-
-Window_HorzCommand.prototype.initialize = function(x, y) {
-    Window_Command.prototype.initialize.call(this, x, y);
-};
-
-[NOTE]:
-For the profile list do the following changes:
-(Adjust based on the number of existing profiles)
-(oh, and don't forget to hide the last element in the list)
-
-Window_HorzCommand.prototype.numVisibleRows = function() {
-    return 2; // will only be 1
-};
-
-Window_HorzCommand.prototype.maxCols = function() {
-    return 4;
-};
-
-
-*/
-
 
 
 /* -- Make another prototype of this class and eliminate the Actor Face!
@@ -504,10 +750,3 @@ And lastly.
 You can indeed use "Window_NameInput" and pass the "editWindow" as being the "Window_NewNameHere".
 
  */
-
-
-// Don't forget to use "Window_Status.prototype.drawHorzLine" to handle horizontal lines.
-// Or more precisely, take inspiration from how the method is designed.
-
-
-// Don't forget about localization options
