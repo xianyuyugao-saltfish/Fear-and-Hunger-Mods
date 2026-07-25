@@ -1,3 +1,7 @@
+//==========================================================
+    // VERSION 1.0.0 -- by Toby Yasha
+//==========================================================
+
 var TY = TY || {};
 TY.fnHEquipSlotEditor = TY.fnHEquipSlotEditor || {};
 
@@ -26,16 +30,14 @@ Imported.TY_FnHEquipSlotEditor = true;
         // Utility Methods
     //==========================================================
 
-    // TODO: Make the name come from the localization
-    _.windowHubCommands = [
-        { name: "Open", symbol: "open" },
-        { name: "Create", symbol: "create" },
-        //{ name: "Options", symbol: "options" },
-        //{ name: "Help", symbol: "help" },
-        //{ name: "Others", symbol: "others" },
-        //{ name: "Music", symbol: "music" },
-        //{ name: "Squid", symbol: "squid" },
-        { name: "Exit", symbol: "exit" },
+    function isGameTermina() {
+        return $dataSystem.gameTitle.match(/TERMINA/gi);
+    }
+
+    _.hubCommandSymbols = [
+        "open",
+        "create",
+        "exit",
     ]
 
     _.profileListCommands = [
@@ -43,8 +45,33 @@ Imported.TY_FnHEquipSlotEditor = true;
         { name: "Blender", symbol: "blender" },
         { name: "Blender2", symbol: "blender2" },
         { name: "Blender3", symbol: "blender3" },
+        { name: "Blender4", symbol: "blender4" },
+        { name: "Blender5", symbol: "blender5" },
+        { name: "Blender6", symbol: "blender6" },
+        { name: "Blender7", symbol: "blender7" },
+        //{ name: "Blender8", symbol: "blender8" },
+        //{ name: "Blender9", symbol: "blender9" },
+        //{ name: "Blender10", symbol: "blender10" },
         { name: "Cancel", symbol: "cancel" },
     ]
+
+    _.profileEquipSlots = {
+        default: ["Weapon", "Shield", "Head", "Body", "Accessory"],
+        blender: ["Weapon", "Weapon", "Head", "Body", "Accessory"],
+        blender2: ["Shield", "Shield", "Head", "Body", "Accessory"],
+        blender3: ["Weapon", "Weapon", "Accessory", "Accessory", "Accessory"],
+        blender4: ["Weapon", "Weapon", "Weapon", "Accessory", "Accessory", "Accessory"],
+        blender5: ["Accessory", "Accessory", "Accessory", "Accessory", "Accessory", "Accessory"]
+    }
+
+    _.profileActors = {
+        default: ["Cahara", "D'arce"],
+        blender: ["Enki"],
+        blender2: ["Cahara", "D'arce", "Ragnavaldr", "Enki"],
+        blender3: ["Cahara", "D'arce", "Enki"],
+        blender4: ["Cahara", "D'arce"],
+        blender5: ["Enki"],
+    }
 
     //==========================================================
         // EditorLayout
@@ -79,35 +106,34 @@ Imported.TY_FnHEquipSlotEditor = true;
     EditorStrings.VERSION = "v1.0.0";
 
     EditorStrings.KEYS = {
-        HUB_TITLE: "hub_title",
+        HUB_TITLE: "hubTitle",
         OPEN: "open",
         CREATE: "create",
         EXIT: "exit",
-        PROFILE_LIST_TITLE: "profile_list_title",
+        PROFILE_LIST_TITLE: "profileListTitle",
         PREVIEW: "preview",
         ASSIGNED: "assigned",
-        PROFILE_EDITOR_TITLE: "profile_editor_title",
-        EQUIP_SLOTS: "equip_slots",
+        PROFILE_EDITOR_TITLE: "profileEditorTitle",
+        EQUIP_SLOTS: "equipSlots",
         ADD: "add",
         REMOVE: "remove",
         MOVE: "move",
         SAVE: "save",
         HELP: "help",
         CANCEL: "cancel",
-        
     }
 
     EditorStrings.LOCALES = {
         EN: {
-            hub_title: "Equip Slot Editor",
+            hubTitle: "Equip Slot Editor",
             open: "Open",
             create: "Create",
             exit: "Exit",
-            profile_list_title: "Profile List",
+            profileListTitle: "Profile List",
             preview: "Preview",
             assigned: "Assigned",
-            profile_editor_title: "Profile Editor",
-            equip_slots: "Equip Slots",
+            profileEditorTitle: "Profile Editor",
+            equipSlots: "Equip Slots",
             add: "Add",
             remove: "Remove",
             move: "Move",
@@ -249,7 +275,7 @@ Imported.TY_FnHEquipSlotEditor = true;
     Window_EditorCommandBase.prototype.createBackContents = function() {
         const width = this.contentsWidth();
         const height = this.contentsHeight();
-        const bitmap = new Bitmap(width, height);
+        const bitmap = new Bitmap(width, height); // NOTE: The "contents" bitmap and this bitmap need to be destroyed when the scene ends.
 
         this._contentsBackSprite = new Sprite(bitmap);
         this._windowSpriteContainer.addChild(this._contentsBackSprite);
@@ -304,21 +330,6 @@ Imported.TY_FnHEquipSlotEditor = true;
     _.Window_EditorCommandBase = Window_EditorCommandBase;
 
     //==========================================================
-        // Window_EditorHorzCommand
-    //==========================================================
-
-    function Window_EditorHorzCommand() {
-        this.initialize.apply(this, arguments);
-    }
-    
-    Window_EditorHorzCommand.prototype = Object.create(Window_EditorCommandBase.prototype);
-    Window_EditorHorzCommand.prototype.constructor = Window_EditorHorzCommand;
-    
-    Window_EditorHorzCommand.prototype.maxCols = function() {
-        return 2;
-    };
-
-    //==========================================================
         // EditorController
     //==========================================================
 
@@ -341,15 +352,15 @@ Imported.TY_FnHEquipSlotEditor = true;
     }
 
     EditorController.prototype.createMainWindow = function() {
-        
+        // override
     }
 
     EditorController.prototype.createCommandWindow = function() {
-        
+        // override
     }
 
     EditorController.prototype.refresh = function() {
-
+        // override
     }
 
     EditorController.prototype.activate = function() {
@@ -412,8 +423,8 @@ Imported.TY_FnHEquipSlotEditor = true;
     Window_HubCommands.prototype.constructor = Window_HubCommands;
 
     Window_HubCommands.prototype.makeCommandList = function() {
-        for (const command of _.windowHubCommands) {
-            this.addCommand(command.name, command.symbol, true);
+        for (const symbol of _.hubCommandSymbols) {
+            this.addCommand(EditorStrings.get(symbol), symbol, true);
         }
     };
 
@@ -435,7 +446,7 @@ Imported.TY_FnHEquipSlotEditor = true;
 
         const commandHeight = (
             EditorLayout.COMMAND_HEIGHT * 
-            _.windowHubCommands.length
+            _.hubCommandSymbols.length
         );
 
         const height = (
@@ -506,54 +517,38 @@ Imported.TY_FnHEquipSlotEditor = true;
     Window_ProfileList.prototype = Object.create(Window_EditorBase.prototype);
     Window_ProfileList.prototype.constructor = Window_ProfileList;
 
+    Window_ProfileList.prototype.initialize = function(x, y, width, height) {
+        Window_EditorBase.prototype.initialize.call(this, x, y, width, height);
+
+        this._profileCommandsWindow = null;
+        this._profileCommandsSymbol = null;
+    }
+
+    Window_ProfileList.prototype.setProfileCommandsWindow = function(win) {
+        this._profileCommandsWindow = win;
+    }
+
+    Window_ProfileList.prototype.update = function() {
+        Window_EditorBase.prototype.update.call(this);
+
+        if (!this.active) return;
+        if (!this._profileCommandsWindow) return;
+
+        const symbol = this._profileCommandsWindow.currentSymbol();
+
+        if (this._profileCommandsSymbol === symbol) return;
+
+        this._profileCommandsSymbol = symbol;
+        this.drawLayout();
+    }
+
     Window_ProfileList.prototype.drawLayout = function() {
+        this.contents.clear();
         this.drawTitle();
-
-        const margin = 4;
-
-        ///
-
-        this.changeTextColor(this.systemColor());
-        this.contents.fontSize = this.standardFontSize();
-
-        this.drawText(EditorStrings.get(EditorStrings.KEYS.PREVIEW), margin, this.lineHeight(), this.contentsWidth());
-        this.drawHorizontalLine(this.lineHeight() * 2);
-
-        ///
-
-        this.changeTextColor(this.normalColor());
-        this.contents.fontSize = this.standardFontSize() - 4;
-
-        const lineSpacing = EditorLayout.PADDING * 2 - 4;
-
-        for (let i = 0, x = margin; i < 5; i++) { // maximum 5 equip slots per line
-
-            this.drawText("Weapon", x, this.lineHeight() * 2 + margin, this.contentsWidth());
-            this.drawText("Accessory", x, this.lineHeight() * 2 + margin + lineSpacing, this.contentsWidth());
-            x += this.textWidth("Accessory") + 24; // the highest width takes priority
-        }
-
-
-        ///
-
-        this.changeTextColor(this.systemColor());
-        this.contents.fontSize = this.standardFontSize();
-
-        this.drawText(EditorStrings.get(EditorStrings.KEYS.ASSIGNED), margin, this.lineHeight() * 4, this.contentsWidth());
-        this.drawHorizontalLine(this.lineHeight() * 5);
-
-        ///
-
-        this.changeTextColor(this.normalColor());
-        this.contents.fontSize = this.standardFontSize() - 4;
-
-        for (let i = 0, x = margin; i < 3; i++) {
-
-            this.drawText("Cahara", x, this.lineHeight() * 5 + 4, this.contentsWidth());
-            x += this.textWidth("Cahara") + 24;
-        }
-
-        ///
+        this.drawPreviewHeader();
+        this.drawPreviewContents();
+        this.drawAssignedHeader();
+        this.drawAssignedContents();
     }
 
     Window_ProfileList.prototype.drawTitle = function() {
@@ -563,12 +558,12 @@ Imported.TY_FnHEquipSlotEditor = true;
     };
 
     Window_ProfileList.prototype.drawHorizontalLine = function(lineY) {
-
         const margin = 4;
         const x = margin / 2;
         const y = lineY + margin / 2;
         const w = this.contentsWidth() - margin;
         const h = 4;
+
         this.contents.fillRect(x, y, w, h, "#403840");
     }
 
@@ -584,42 +579,128 @@ Imported.TY_FnHEquipSlotEditor = true;
 
     Window_ProfileList.prototype.drawPreviewHeader = function() {
         const text = EditorStrings.get(EditorStrings.KEYS.PREVIEW);
-        const lineY = 2;
+        const lineY = 1;
         this.drawSectionHeader(text, lineY);
     }
 
-    Window_ProfileList.prototype.drawPreviewContents = function() {
+    Window_ProfileList.prototype.prepareContentText = function() {
         this.changeTextColor(this.normalColor());
         this.contents.fontSize = this.standardFontSize() - 4;
+    }
 
-        const lineSpacing = EditorLayout.PADDING * 2 - 4;
+    /*Window_ProfileList.prototype.drawPreviewContents = function() {
+        this.prepareContentText();
 
-        for (let i = 0, x = margin; i < 5; i++) { // maximum 5 equip slots per line
+        const maxColumns = 5;
+        const margin = 4;
+        const columnSpacing = EditorLayout.PADDING + 8;
+        const rowSpacing = EditorLayout.PADDING * 2 - 4;
+        const startY = this.lineHeight() * 2 + margin;
 
-            this.drawText("Weapon", x, this.lineHeight() * 2 + margin, this.contentsWidth());
-            this.drawText("Accessory", x, this.lineHeight() * 2 + margin + lineSpacing, this.contentsWidth());
-            x += this.textWidth("Accessory") + 24; // the highest width takes priority
+        const equipSlots = _.profileEquipSlots[this._profileCommandsSymbol];
+
+        if (!equipSlots || equipSlots.length === 0) return;
+
+        const textWidth = Math.max(...equipSlots.map(slot => this.textWidth(slot)));
+        const maxSlots = Math.min(equipSlots.length, 10);
+
+        for (let i = 0; i < maxSlots; i++) {
+            let row = Math.floor(i / maxColumns);
+            let column = i % maxColumns;
+            let x = margin + column * (textWidth + columnSpacing);
+            let y = startY + row * rowSpacing;
+
+            this.drawText(equipSlots[i], x, y, textWidth);
+        }
+    }*/
+
+    Window_ProfileList.prototype.drawPreviewContents = function() {
+        this.prepareContentText();
+
+        const maxColumns = 5;
+        const margin = 4;
+        const columnSpacing = EditorLayout.PADDING * 2 - 4;
+        const rowSpacing = EditorLayout.PADDING * 2 - 4;
+        let x = margin;
+        const startY = this.lineHeight() * 2 + margin;
+
+        const equipSlots = _.profileEquipSlots[this._profileCommandsSymbol];
+
+        if (!equipSlots || equipSlots.length === 0) return;
+
+        const maxSlots = Math.min(equipSlots.length, 10);
+
+        for (let i = 0; i < maxSlots; i++) {
+            let row = Math.floor(i / maxColumns);
+            let column = i % maxColumns;
+            let y = startY + row * rowSpacing;
+
+            const textWidth = this.textWidth(equipSlots[i]);
+
+            if (column === 0) x = margin;
+            this.drawText(equipSlots[i], x, y, textWidth);
+            x += textWidth + columnSpacing;
         }
     }
 
     Window_ProfileList.prototype.drawAssignedHeader = function() {
-        this.changeTextColor(this.systemColor());
-        this.contents.fontSize = this.standardFontSize();
-
-        this.drawText(EditorStrings.get(EditorStrings.KEYS.ASSIGNED), margin, this.lineHeight() * 4, this.contentsWidth());
-        this.drawHorizontalLine(this.lineHeight() * 5);
+        const text = EditorStrings.get(EditorStrings.KEYS.ASSIGNED);
+        const lineY = 4;
+        this.drawSectionHeader(text, lineY);
     }
 
     Window_ProfileList.prototype.drawAssignedContents = function() {
-        this.changeTextColor(this.normalColor());
-        this.contents.fontSize = this.standardFontSize() - 4;
+        this.prepareContentText();
 
-        for (let i = 0, x = margin; i < 3; i++) {
+        const margin = 4;
+        const spacing = EditorLayout.PADDING * 2 - 4;
+        let x = margin;
+        const y = this.lineHeight() * 5 + margin;
 
-            this.drawText("Cahara", x, this.lineHeight() * 5 + 4, this.contentsWidth());
-            x += this.textWidth("Cahara") + 24;
+        const actors = _.profileActors[this._profileCommandsSymbol];
+
+        if (!actors || actors.length === 0) return;
+
+        for (let i = 0; i < actors.length; i++) {
+
+            const textWidth = this.textWidth(actors[i]);
+
+            this.drawText(actors[i], x, y, textWidth);
+
+            x += textWidth + spacing;
         }
     }
+
+    /*Window_ProfileList.prototype.drawAssignedContents = function() {
+        this.prepareContentText();
+
+        const margin = 4;
+        const columnSpacing = EditorLayout.PADDING + 8;
+        const y = this.lineHeight() * 5 + margin;
+
+        const actors = _.profileActors[this._profileCommandsSymbol];
+
+        if (!actors || actors.length === 0) return;
+
+        //const textWidth = Math.max(...actors.map(actor => this.textWidth(actor)));
+        //const availableWidth = this.contentsWidth() - margin * 2;
+        //const columnWidth = availableWidth / actors.length;
+        //const columnWidth = 160;
+
+        let textWidth = 0;
+
+        for (let i = 0; i < actors.length; i++) {
+
+            const lastTextWidth = this.textWidth(actors[i]);
+            
+            //let x = margin + i * (lastTextWidth + columnSpacing);
+            //textWidth += lastTextWidth;
+            //let x = margin + i * (columnWidth + columnSpacing);
+            //let x = margin + i * columnWidth;
+
+            this.drawText(actors[i], x, y, lastTextWidth);
+        }
+    }*/
 
     _.Window_ProfileList = Window_ProfileList;
 
@@ -631,8 +712,18 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.initialize.apply(this, arguments);
     }
     
-    Window_ProfileListCommands.prototype = Object.create(Window_EditorHorzCommand.prototype);
+    Window_ProfileListCommands.prototype = Object.create(Window_EditorCommandBase.prototype);
     Window_ProfileListCommands.prototype.constructor = Window_ProfileListCommands;
+
+    Window_ProfileListCommands.prototype.maxCols = function() {
+        return 2;
+    };
+
+    Window_ProfileListCommands.prototype.numVisibleRows = function() {
+        const currentRows = Window_EditorCommandBase.prototype.numVisibleRows.call(this);
+        const maxRows = 5;
+        return Math.min(currentRows, maxRows);
+    };
 
     Window_ProfileListCommands.prototype.makeCommandList = function() {
         for (const command of _.profileListCommands) {
@@ -656,20 +747,19 @@ Imported.TY_FnHEquipSlotEditor = true;
     ProfileListController.prototype.mainWindowRect = function() {
         const width = Graphics.width * 0.9;
 
-        const commandCount = Math.floor(_.profileListCommands.length / 2);
+        const maxCommandRows = 5;
+        const commandCount = Math.ceil(_.profileListCommands.length / 2);
         const commandHeight = (
             EditorLayout.COMMAND_HEIGHT * 
-            commandCount
+            Math.min(commandCount, maxCommandRows)
         );
 
         const height = (
             EditorLayout.HEADER_AREA_HEIGHT +
             EditorLayout.PROFILE_AREA_HEIGHT +
-            //commandHeight +
+            commandHeight +
             EditorLayout.PADDING
         );
-
-        //const height = Graphics.height / 2 + commandHeight;
 
         return {
             width,
@@ -681,16 +771,11 @@ Imported.TY_FnHEquipSlotEditor = true;
 
     ProfileListController.prototype.commandWindowRect = function() {
         const width = this._mainWindow.width - EditorLayout.COMMAND_MARGIN;
-        const commandHeight = (
-            EditorLayout.COMMAND_HEIGHT * 
-            _.windowHubCommands.length
-        );
 
         return {
             width,
             x: this._mainWindow.x + (this._mainWindow.width - width) / 2,
-            y: this._mainWindow.y + EditorLayout.HEADER_AREA_HEIGHT + EditorLayout.PROFILE_AREA_HEIGHT + EditorLayout.PADDING
-            //y: this._mainWindow.height - commandHeight + EditorLayout.PADDING
+            y: this._mainWindow.y + EditorLayout.HEADER_AREA_HEIGHT + EditorLayout.PROFILE_AREA_HEIGHT
         }
     }
 
@@ -702,15 +787,22 @@ Imported.TY_FnHEquipSlotEditor = true;
     }
 
     ProfileListController.prototype.createCommandWindow = function() {
-        /*const rect = this.commandWindowRect();
+        const rect = this.commandWindowRect();
 
         this._commandWindow = new Window_ProfileListCommands(rect.x, rect.y, rect.width);
-        this.registerWindow(this._commandWindow);*/
+        this._commandWindow.setHandler('cancel', this.popController.bind(this));
+        this.registerWindow(this._commandWindow);
     }
 
     ProfileListController.prototype.refresh = function() {
-        this._mainWindow.drawLayout();
+        this._mainWindow.setProfileCommandsWindow(this._commandWindow);
     }
+
+    ProfileListController.prototype.popController = function() {
+        SceneManager._scene.popController();
+    }
+
+    _.ProfileListController = ProfileListController;
 
     //==========================================================
         // Scene_Editor
@@ -733,11 +825,15 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.createControllers();
     };
 
+    Scene_Editor.prototype.getBackgroundBitmap = function() {
+        const image = isGameTermina() ? "forest1" : "cave";
+        return ImageManager.loadBattleback2(image);
+    }
+
     Scene_Editor.prototype.createBackground = function() {
-        const bitmap = ImageManager.loadBattleback2("cave");
         const backgroundWidth = 1000;
 
-        this._backgroundSprite = new Sprite(bitmap);
+        this._backgroundSprite = new Sprite(this.getBackgroundBitmap());
         this._backgroundSprite.x = (Graphics.width - backgroundWidth) / 2;
         this._backgroundSprite.opacity = 192;
 
@@ -754,40 +850,26 @@ Imported.TY_FnHEquipSlotEditor = true;
     }
 
     Scene_Editor.prototype.pushController = function(type) {
-        const controller = this._controllers[type];
+        const previousController = this._controllerLayers[this._controllerLayers.length - 1];
+        if (previousController) previousController.deactivate();
 
-        if (!controller) return;
+        const activeController = this._controllers[type];
 
-        const index = this._controllerLayers.length - 1;
+        activeController.activate();
+        activeController.show();
 
-        if (index >= 0) {
-            const prevLayer = this._controllerLayers[index];
-            prevLayer.deactivate();
-        }
-
-        controller.activate();
-        controller.show();
-
-        this._controllerLayers.push(controller);
+        this._controllerLayers.push(activeController);
     }
 
     Scene_Editor.prototype.popController = function() {
-        let index = this._controllerLayers.length - 1;
+        const activeController = this._controllerLayers[this._controllerLayers.length - 1];
+        activeController.deactivate();
+        activeController.hide();
 
-        if (index < 0) return;
+        this._controllerLayers.pop();
 
-        let controller = this._controllerLayers[index];
-        controller.deactivate();
-        controller.hide();
-
-        this._controllerLayers.splice(index, 1);
-
-        index = this._controllerLayers.length - 1;
-
-        if (index < 0) return;
-
-        controller = this._controllerLayers[index];
-        controller.activate();
+        const previousController = this._controllerLayers[this._controllerLayers.length - 1];
+        if (previousController) previousController.activate();
     }
 
     _.Scene_Editor = Scene_Editor;
