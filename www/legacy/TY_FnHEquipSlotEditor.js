@@ -73,6 +73,15 @@ Imported.TY_FnHEquipSlotEditor = true;
         blender5: ["Enki"],
     }
 
+    _.profileOptionSymbols = [
+        "assign",
+        "edit",
+        "rename",
+        "duplicate",
+        "delete",
+        "cancel"
+    ]
+
     //==========================================================
         // EditorLayout
     //==========================================================
@@ -113,6 +122,12 @@ Imported.TY_FnHEquipSlotEditor = true;
         PROFILE_LIST_TITLE: "profileListTitle",
         PREVIEW: "preview",
         ASSIGNED: "assigned",
+        PROFILE_OPTIONS_TITLE: "profileOptionsTitle",
+        ASSIGN: "assign",
+        EDIT: "edit",
+        RENAME: "rename",
+        DUPLICATE: "duplicate",
+        DELETE: "delete",
         PROFILE_EDITOR_TITLE: "profileEditorTitle",
         EQUIP_SLOTS: "equipSlots",
         ADD: "add",
@@ -132,6 +147,12 @@ Imported.TY_FnHEquipSlotEditor = true;
             profileListTitle: "Profile List",
             preview: "Preview",
             assigned: "Assigned",
+            profileOptionsTitle: "Profile Options",
+            assign: "Assign",
+            edit: "Edit",
+            rename: "Rename",
+            duplicate: "Duplicate",
+            delete: "Delete",
             profileEditorTitle: "Profile Editor",
             equipSlots: "Equip Slots",
             add: "Add",
@@ -162,6 +183,16 @@ Imported.TY_FnHEquipSlotEditor = true;
     _.EditorStrings = EditorStrings;
 
     //==========================================================
+        // EditorContext
+    //==========================================================
+
+    function EditorContext() {
+        throw new Error("This is a static class");
+    }
+
+    EditorContext.selectedProfile = null;
+
+    //==========================================================
         // Window_EditorBase
     //==========================================================
 
@@ -178,9 +209,9 @@ Imported.TY_FnHEquipSlotEditor = true;
     
         this.drawText(
             text,
-            -this.padding,
+            0,
             y,
-            this.width,
+            this.contentsWidth(),
             "center"
         );
     };
@@ -212,6 +243,15 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.width = width;
         this.refresh();
         this.reselect();
+        this.setBackgroundType(1);
+    };
+
+    Window_EditorCommandBase.prototype.dimColor1 = function() {
+        return 'rgba(0, 0, 0, 0.7529411764705882)';
+    };
+    
+    Window_EditorCommandBase.prototype.dimColor2 = function() {
+        return this.dimColor1();
     };
 
     // should only update when the window is active
@@ -229,14 +269,14 @@ Imported.TY_FnHEquipSlotEditor = true;
     };
 
     Window_EditorCommandBase.prototype._hideFrame = function() {
-        this._windowFrameSprite.visible = false;
-        this.margin = 0;
+        //this._windowFrameSprite.visible = false;
+        //this.margin = 0;
     }
 
     /**
      * @deprecated the frame is hidden
      */
-    Window_EditorCommandBase.prototype._refreshFrame = function() {};
+    //Window_EditorCommandBase.prototype._refreshFrame = function() {};
 
     /**
      * [NOTE] The original MV implementation may produce edge artifacts when the
@@ -245,7 +285,7 @@ Imported.TY_FnHEquipSlotEditor = true;
      * 
      * Implementation based on MZ Code -- Window.prototype._refreshBack
      */
-    Window_EditorCommandBase.prototype._refreshBack = function() {
+    /*Window_EditorCommandBase.prototype._refreshBack = function() {
         const backgroundWidth = 96;
         const backgroundHeight = 96;
     
@@ -254,7 +294,7 @@ Imported.TY_FnHEquipSlotEditor = true;
         this._windowBackSprite.scale.x = this._width / backgroundWidth;
         this._windowBackSprite.scale.y = this._height / backgroundHeight;
         this._windowBackSprite.setColorTone(this._colorTone);
-    };
+    };*/
 
     /**
      * @deprecated the game ignores scroll wheel inputs
@@ -278,7 +318,8 @@ Imported.TY_FnHEquipSlotEditor = true;
         const bitmap = new Bitmap(width, height); // NOTE: The "contents" bitmap and this bitmap need to be destroyed when the scene ends.
 
         this._contentsBackSprite = new Sprite(bitmap);
-        this._windowSpriteContainer.addChild(this._contentsBackSprite);
+        this.addChildToBack(this._contentsBackSprite);
+        //this._windowSpriteContainer.addChild(this._contentsBackSprite);
     }
 
     Window_EditorCommandBase.prototype.standardPadding = function() {
@@ -337,8 +378,14 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.initialize.apply(this, arguments);
     }
 
-    EditorController.prototype.initialize = function() {
+    EditorController.prototype.initMembers = function() {
+        this._mainWindow = null;
+        this._commandWindow = null;
         this._windows = [];
+    }
+
+    EditorController.prototype.initialize = function() {
+        this.initMembers();
         this.createMainWindow();
         this.createCommandWindow();
         this.refresh();
@@ -377,6 +424,14 @@ Imported.TY_FnHEquipSlotEditor = true;
 
     EditorController.prototype.hide = function() {
         this._windows.forEach(win => win.hide());
+    }
+
+    EditorController.prototype.reset = function() {
+        if (this._commandWindow) this._commandWindow.select(0);
+    }
+
+    EditorController.prototype.popController = function() {
+        SceneManager._scene.popController();
     }
 
     _.EditorController = EditorController;
@@ -487,6 +542,7 @@ Imported.TY_FnHEquipSlotEditor = true;
         this._commandWindow = new Window_HubCommands(rect.x, rect.y, rect.width);
         this._commandWindow.setHandler('open', this.openProfileList.bind(this));
         this._commandWindow.setHandler('exit', this.popScene.bind(this));
+        this._commandWindow.setHandler('cancel', this.popScene.bind(this));
         this.registerWindow(this._commandWindow);
     }
 
@@ -520,25 +576,19 @@ Imported.TY_FnHEquipSlotEditor = true;
     Window_ProfileList.prototype.initialize = function(x, y, width, height) {
         Window_EditorBase.prototype.initialize.call(this, x, y, width, height);
 
-        this._profileCommandsWindow = null;
-        this._profileCommandsSymbol = null;
-    }
-
-    Window_ProfileList.prototype.setProfileCommandsWindow = function(win) {
-        this._profileCommandsWindow = win;
+        this._profileSymbol = null;
     }
 
     Window_ProfileList.prototype.update = function() {
         Window_EditorBase.prototype.update.call(this);
 
-        if (!this.active) return;
-        if (!this._profileCommandsWindow) return;
+        if (this.active) this.updateLayout();
+    }
 
-        const symbol = this._profileCommandsWindow.currentSymbol();
+    Window_ProfileList.prototype.updateLayout = function() {
+        if (EditorContext.selectedProfile === this._profileSymbol) return;
 
-        if (this._profileCommandsSymbol === symbol) return;
-
-        this._profileCommandsSymbol = symbol;
+        this._profileSymbol = EditorContext.selectedProfile;
         this.drawLayout();
     }
 
@@ -588,32 +638,6 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.contents.fontSize = this.standardFontSize() - 4;
     }
 
-    /*Window_ProfileList.prototype.drawPreviewContents = function() {
-        this.prepareContentText();
-
-        const maxColumns = 5;
-        const margin = 4;
-        const columnSpacing = EditorLayout.PADDING + 8;
-        const rowSpacing = EditorLayout.PADDING * 2 - 4;
-        const startY = this.lineHeight() * 2 + margin;
-
-        const equipSlots = _.profileEquipSlots[this._profileCommandsSymbol];
-
-        if (!equipSlots || equipSlots.length === 0) return;
-
-        const textWidth = Math.max(...equipSlots.map(slot => this.textWidth(slot)));
-        const maxSlots = Math.min(equipSlots.length, 10);
-
-        for (let i = 0; i < maxSlots; i++) {
-            let row = Math.floor(i / maxColumns);
-            let column = i % maxColumns;
-            let x = margin + column * (textWidth + columnSpacing);
-            let y = startY + row * rowSpacing;
-
-            this.drawText(equipSlots[i], x, y, textWidth);
-        }
-    }*/
-
     Window_ProfileList.prototype.drawPreviewContents = function() {
         this.prepareContentText();
 
@@ -624,7 +648,7 @@ Imported.TY_FnHEquipSlotEditor = true;
         let x = margin;
         const startY = this.lineHeight() * 2 + margin;
 
-        const equipSlots = _.profileEquipSlots[this._profileCommandsSymbol];
+        const equipSlots = _.profileEquipSlots[this._profileSymbol];
 
         if (!equipSlots || equipSlots.length === 0) return;
 
@@ -657,7 +681,7 @@ Imported.TY_FnHEquipSlotEditor = true;
         let x = margin;
         const y = this.lineHeight() * 5 + margin;
 
-        const actors = _.profileActors[this._profileCommandsSymbol];
+        const actors = _.profileActors[this._profileSymbol];
 
         if (!actors || actors.length === 0) return;
 
@@ -671,37 +695,6 @@ Imported.TY_FnHEquipSlotEditor = true;
         }
     }
 
-    /*Window_ProfileList.prototype.drawAssignedContents = function() {
-        this.prepareContentText();
-
-        const margin = 4;
-        const columnSpacing = EditorLayout.PADDING + 8;
-        const y = this.lineHeight() * 5 + margin;
-
-        const actors = _.profileActors[this._profileCommandsSymbol];
-
-        if (!actors || actors.length === 0) return;
-
-        //const textWidth = Math.max(...actors.map(actor => this.textWidth(actor)));
-        //const availableWidth = this.contentsWidth() - margin * 2;
-        //const columnWidth = availableWidth / actors.length;
-        //const columnWidth = 160;
-
-        let textWidth = 0;
-
-        for (let i = 0; i < actors.length; i++) {
-
-            const lastTextWidth = this.textWidth(actors[i]);
-            
-            //let x = margin + i * (lastTextWidth + columnSpacing);
-            //textWidth += lastTextWidth;
-            //let x = margin + i * (columnWidth + columnSpacing);
-            //let x = margin + i * columnWidth;
-
-            this.drawText(actors[i], x, y, lastTextWidth);
-        }
-    }*/
-
     _.Window_ProfileList = Window_ProfileList;
 
     //==========================================================
@@ -714,6 +707,13 @@ Imported.TY_FnHEquipSlotEditor = true;
     
     Window_ProfileListCommands.prototype = Object.create(Window_EditorCommandBase.prototype);
     Window_ProfileListCommands.prototype.constructor = Window_ProfileListCommands;
+
+    Window_ProfileListCommands.prototype.select = function(index) {
+        Window_EditorCommandBase.prototype.select.call(this, index);
+
+        const symbol = this.currentSymbol();
+        if (symbol !== "cancel") EditorContext.selectedProfile = symbol;
+    };
 
     Window_ProfileListCommands.prototype.maxCols = function() {
         return 2;
@@ -790,19 +790,123 @@ Imported.TY_FnHEquipSlotEditor = true;
         const rect = this.commandWindowRect();
 
         this._commandWindow = new Window_ProfileListCommands(rect.x, rect.y, rect.width);
+        this._commandWindow.setHandler('ok', this.openProfileOptions.bind(this));
         this._commandWindow.setHandler('cancel', this.popController.bind(this));
         this.registerWindow(this._commandWindow);
     }
 
-    ProfileListController.prototype.refresh = function() {
-        this._mainWindow.setProfileCommandsWindow(this._commandWindow);
-    }
-
-    ProfileListController.prototype.popController = function() {
-        SceneManager._scene.popController();
+    ProfileListController.prototype.openProfileOptions = function() {
+        SceneManager._scene.pushController("profileOptions");
     }
 
     _.ProfileListController = ProfileListController;
+
+    //==========================================================
+        // Window_ProfileOptions
+    //==========================================================
+
+    function Window_ProfileOptions() {
+        this.initialize.apply(this, arguments);
+    }
+    
+    Window_ProfileOptions.prototype = Object.create(Window_EditorBase.prototype);
+    Window_ProfileOptions.prototype.constructor = Window_ProfileOptions;
+
+    Window_ProfileOptions.prototype.drawTitle = function() {
+        const text = EditorStrings.get(EditorStrings.KEYS.PROFILE_OPTIONS_TITLE);
+
+        Window_EditorBase.prototype.drawTitle.call(this, text);
+    };
+
+    _.Window_ProfileOptions = Window_ProfileOptions;
+
+    //==========================================================
+        // Window_ProfileOptionsCommands
+    //==========================================================
+
+    function Window_ProfileOptionsCommands() {
+        this.initialize.apply(this, arguments);
+    }
+    
+    Window_ProfileOptionsCommands.prototype = Object.create(Window_EditorCommandBase.prototype);
+    Window_ProfileOptionsCommands.prototype.constructor = Window_ProfileOptionsCommands;
+
+    Window_ProfileOptionsCommands.prototype.backgroundRectColor = function(index) {
+        if (this.commandSymbol(index) === "delete") return "#602217";
+        return Window_EditorCommandBase.prototype.backgroundRectColor.call(index);
+    }
+
+    Window_ProfileOptionsCommands.prototype.makeCommandList = function() {
+        for (const symbol of _.profileOptionSymbols) {
+            this.addCommand(EditorStrings.get(symbol), symbol, true);
+        }
+    };
+
+    _.Window_ProfileOptionsCommands = Window_ProfileOptionsCommands;
+
+    //==========================================================
+        // ProfileOptionsController
+    //==========================================================
+
+    function ProfileOptionsController() {
+        this.initialize.apply(this, arguments);
+    }
+
+    ProfileOptionsController.prototype = Object.create(EditorController.prototype);
+    ProfileOptionsController.prototype.constructor = ProfileOptionsController;
+
+    ProfileOptionsController.prototype.mainWindowRect = function() {
+        const width = Graphics.width / 2;
+
+        const commandHeight = (
+            EditorLayout.COMMAND_HEIGHT * 
+            _.profileOptionSymbols.length
+        );
+
+        const height = (
+            EditorLayout.HEADER_AREA_HEIGHT +
+            commandHeight +
+            EditorLayout.PADDING
+        );
+
+        return {
+            width,
+            height,
+            x: (Graphics.width - width) / 2,
+            y: (Graphics.height - height) / 2
+        };
+    }
+
+    ProfileOptionsController.prototype.commandWindowRect = function() {
+        const width = this._mainWindow.width - EditorLayout.COMMAND_MARGIN;
+
+        return {
+            width,
+            x: this._mainWindow.x + (this._mainWindow.width - width) / 2,
+            y: this._mainWindow.y + EditorLayout.HEADER_AREA_HEIGHT
+        }
+    }
+
+    ProfileOptionsController.prototype.createMainWindow = function() {
+        const rect = this.mainWindowRect();
+
+        this._mainWindow = new Window_ProfileOptions(rect.x, rect.y, rect.width, rect.height);
+        this.registerWindow(this._mainWindow);
+    }
+
+    ProfileOptionsController.prototype.createCommandWindow = function() {
+        const rect = this.commandWindowRect();
+
+        this._commandWindow = new Window_ProfileOptionsCommands(rect.x, rect.y, rect.width);
+        this._commandWindow.setHandler('cancel', this.popController.bind(this));
+        this.registerWindow(this._commandWindow);
+    }
+
+    ProfileOptionsController.prototype.refresh = function() {
+        this._mainWindow.drawTitle();
+    }
+
+    _.ProfileOptionsController = ProfileOptionsController;
 
     //==========================================================
         // Scene_Editor
@@ -823,6 +927,7 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.createBackground();
         this.createWindowLayer();
         this.createControllers();
+        //this.createBackgroundDimmer();
     };
 
     Scene_Editor.prototype.getBackgroundBitmap = function() {
@@ -840,10 +945,20 @@ Imported.TY_FnHEquipSlotEditor = true;
         this.addChild(this._backgroundSprite);
     }
 
+    /*Scene_Editor.prototype.createBackgroundDimmer = function() {
+        this._backgroundDimmer = new ScreenSprite();
+        this._backgroundDimmer.opacity = 192;
+        // IMPORTANT: This allows the sprite to coexist alongside windows in the window layer rendering logic
+        this._backgroundDimmer._isWindow = false;
+
+        this.addWindow(this._backgroundDimmer);
+    }*/
+
     Scene_Editor.prototype.createControllers = function() {
         this._controllers = {
             hub: new HubController(),
             profileList: new ProfileListController(),
+            profileOptions: new ProfileOptionsController(),
         }
 
         this.pushController("hub");
@@ -857,6 +972,7 @@ Imported.TY_FnHEquipSlotEditor = true;
 
         activeController.activate();
         activeController.show();
+        activeController.reset();
 
         this._controllerLayers.push(activeController);
     }
