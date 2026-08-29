@@ -685,7 +685,44 @@ TY.terminaTweaks = TY.terminaTweaks || {};
             TY_BattleManager_forceAction.call(this, battler);
         }
     };
+	
+//===============================================================
+  // Sprite_Character
+//===============================================================
+    /**
+	 * BUGFIX: Prevents flickering of event sprites using character images
+	 *         when executing the "Change Tileset" map command.
+	 * NOTE  :  The engine used to rebind textures just because tilesetId changed 
+	 *			even if the character image didn't.
+     * 			This fix ignores tilesetId for non‑tile events, 
+	 *			only update when the actual image changes.
+     * 			Tile‑based events keep the original behavior, so nothing else breaks.
+    */
+  var _updateBitmap = Sprite_Character.prototype.updateBitmap;
 
+  Sprite_Character.prototype.updateBitmap = function () {
+    var tileId = this._character.tileId();
+
+    if (tileId > 0) {
+      _updateBitmap.call(this);
+      return;
+    }
+    var characterName = this._character.characterName();
+    var characterIndex = this._character.characterIndex();
+
+    var isChanged =
+      this._characterName !== characterName ||
+      this._characterIndex !== characterIndex;
+
+    if (isChanged) {
+      var newBitmap = ImageManager.loadCharacter(characterName);
+      this.bitmap = newBitmap;
+      this._characterName = characterName;
+      this._characterIndex = characterIndex;
+      this._isBigCharacter = ImageManager.isBigCharacter(characterName);
+    }
+  };
+	
 //==========================================================
     // End of File
 //==========================================================
