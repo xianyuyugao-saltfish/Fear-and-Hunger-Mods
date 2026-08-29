@@ -1,6 +1,6 @@
 /*:
  * @plugindesc v1.9 - Includes a list of QoL and General changes to the game.
- * @author Toby Yasha, Fokuto, Nemesis, Atlasle
+ * @author Toby Yasha, Fokuto, Nemesis, Atlasle, 咸鱼鱼糕
  *
  * @help
  *
