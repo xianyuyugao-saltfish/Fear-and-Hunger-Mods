@@ -1,5 +1,5 @@
 /*:
- * @plugindesc v1.9 - Includes a list of QoL and General changes to the game.
+ * @plugindesc v2.0 - Includes a list of QoL and General changes to the game.
  * @author Toby Yasha, Fokuto, Nemesis, Atlasle, 咸鱼鱼糕
  *
  * @help
@@ -159,6 +159,10 @@
  * - DevTools now can be called even during the deployed version
  *   of the game.
  *
+ * Version 2.0 - 8/29/2026
+ * - Fixed flickering of event sprites using character images
+ *   when executing the "Change Tileset" map command.
+ * 
  */
 
 var TY = TY || {};
