@@ -1,5 +1,5 @@
 /*:
- * @plugindesc v1.9 - Includes a list of QoL and General changes to the game.
+ * @plugindesc v2.0 - Includes a list of QoL and General changes to the game.
  * @author Toby Yasha, Fokuto, Nemesis, Atlasle, 咸鱼鱼糕
  *
  * @help
@@ -159,6 +159,11 @@
  * - DevTools now can be called even during the deployed version
  *   of the game.
  *
+ * Version 2.0 - 8/30/2026
+ * - Fixed flickering of event sprites using character images
+ *   when executing the "Change Tileset" map command.
+ *   - Fixed bug where event image persists when switching to 
+ *     a blank image event page from previous fix
  */
 
 var TY = TY || {};
@@ -711,12 +716,14 @@ TY.terminaTweaks = TY.terminaTweaks || {};
     var characterIndex = this._character.characterIndex();
 
     var isChanged =
+      this._tileId !== tileId ||
       this._characterName !== characterName ||
       this._characterIndex !== characterIndex;
 
     if (isChanged) {
       var newBitmap = ImageManager.loadCharacter(characterName);
       this.bitmap = newBitmap;
+      this._tileId = tileId;
       this._characterName = characterName;
       this._characterIndex = characterIndex;
       this._isBigCharacter = ImageManager.isBigCharacter(characterName);
