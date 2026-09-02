@@ -1,5 +1,5 @@
 /*:
- * @plugindesc v2.0 - Includes a list of QoL and General changes to the game.
+ * @plugindesc v2.1 - Includes a list of QoL and General changes to the game.
  * @author Toby Yasha, Fokuto, Nemesis, Atlasle, 咸鱼鱼糕
  *
  * @help
@@ -31,6 +31,10 @@
  *   - This basically means the game would still be open in the 
  *     Task Manager.
  *
+ * - Fixed flickering of event sprites using character images.
+ * 
+ * - Fixed pixel gaps between event sprites and map tiles during fast scrolling.
+ 
  * [!] PrettySleekGauges Changes:
  * - Fixed gauges not clearing number values when updating.
  *
@@ -164,6 +168,8 @@
  *   when executing the "Change Tileset" map command.
  *   - Fixed bug where event image persists when switching to 
  *     a blank image event page from previous fix
+ * Version 2.1 - 9/02/2026
+ * - Fixed pixel gaps during fast map scrolling by rounding sprite/tilemap positions.
  */
 
 var TY = TY || {};
@@ -694,15 +700,15 @@ TY.terminaTweaks = TY.terminaTweaks || {};
 //===============================================================
   // Sprite_Character
 //===============================================================
-    /**
-	 * BUGFIX: Prevents flickering of event sprites using character images
-	 *         when executing the "Change Tileset" map command.
-	 * NOTE  :  The engine used to rebind textures just because tilesetId changed 
-	 *			even if the character image didn't.
-     * 			This fix ignores tilesetId for non‑tile events, 
-	 *			only update when the actual image changes.
-     * 			Tile‑based events keep the original behavior, so nothing else breaks.
-    */
+  /**
+   * BUGFIX: Prevents flickering of event sprites using character images
+   *         when executing the "Change Tileset" map command.
+   * NOTE: The engine used to rebind textures just because tilesetId changed
+   *       even if the character image didn't.
+   *       This fix ignores tilesetId for non‑tile events,
+   *       only update when the actual image changes.
+   *       Tile‑based events keep the original behavior, so nothing else breaks.
+   */
   var _updateBitmap = Sprite_Character.prototype.updateBitmap;
 
   Sprite_Character.prototype.updateBitmap = function () {
@@ -729,7 +735,65 @@ TY.terminaTweaks = TY.terminaTweaks || {};
       this._isBigCharacter = ImageManager.isBigCharacter(characterName);
     }
   };
-	
+
+  /**
+   * BUGFIX: Prevents 1-2px seams between adjacent event sprites during fast scrolling.
+   * NOTE: Floating-point positions cause sub-pixel rendering. Rounding to
+   *       whole pixels fixes the gaps without affecting gameplay.
+   */
+  var TY_Sprite_Character_updatePosition =
+    Sprite_Character.prototype.updatePosition;
+
+  Sprite_Character.prototype.updatePosition = function () {
+    TY_Sprite_Character_updatePosition.call(this);
+    this.x = Math.round(this.x);
+    this.y = Math.round(this.y);
+  };
+
+  //===============================================================
+  // Tilemap
+  //===============================================================
+
+  /**
+   * Align tilemap origin rounding with sprite rounding.
+   * NOTE: ShaderTilemap used Math.floor() while sprites use Math.round().
+   *       This mismatch caused relative drift. Now both use the same method.
+   *       Also forces roundPixels to true for all map tilemaps.
+   */
+  if (ShaderTilemap) {
+    var TY_ShaderTilemap_updateLayerPositions =
+      ShaderTilemap.prototype._updateLayerPositions;
+    ShaderTilemap.prototype._updateLayerPositions = function (startX, startY) {
+      if (this.roundPixels) {
+        var ox = Math.round(this.origin.x);
+        var oy = Math.round(this.origin.y);
+        this.lowerZLayer.position.x = startX * this._tileWidth - ox;
+        this.lowerZLayer.position.y = startY * this._tileHeight - oy;
+        this.upperZLayer.position.x = startX * this._tileWidth - ox;
+        this.upperZLayer.position.y = startY * this._tileHeight - oy;
+      } else {
+        TY_ShaderTilemap_updateLayerPositions.call(this, startX, startY);
+      }
+    };
+    ShaderTilemap.prototype.roundPixels = true;
+  }
+
+  if (Tilemap) {
+    var TY_Tilemap_updateTransform = Tilemap.prototype.updateTransform;
+    Tilemap.prototype.updateTransform = function () {
+      var ox = this.origin.x,
+        oy = this.origin.y;
+      if (this.roundPixels) {
+        this.origin.x = Math.round(ox);
+        this.origin.y = Math.round(oy);
+      }
+      TY_Tilemap_updateTransform.call(this);
+      this.origin.x = ox;
+      this.origin.y = oy;
+    };
+    Tilemap.prototype.roundPixels = true;
+  }
+
 //==========================================================
     // End of File
 //==========================================================
