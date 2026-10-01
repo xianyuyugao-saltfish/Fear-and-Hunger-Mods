@@ -1,5 +1,5 @@
 /*:
- * @plugindesc v2.1 - Includes a list of QoL and General changes to the game.
+ * @plugindesc v2.2 - Includes a list of QoL and General changes to the game.
  * @author Toby Yasha, Fokuto, Nemesis, Atlasle, 咸鱼鱼糕
  *
  * @help
@@ -68,7 +68,20 @@
  * [!] VE_BasicModule/VE_FogAndOverlay Changes:
  * - Fixed sprite order in battle being messed up because it was
  *   updated every frame.
+ * - Skipped the fog update loop when no fog effect exists.
+ * 
+ * [!] TerraxLighting Changes:
+ * - Fixed the "B"(brightness) option of the Light commands
+ *   having no effect.
  *
+ * - Improved light rendering performance: reused light mask sprite,
+ *   canvas.ellipse() for ovals, cached color checks, off-screen
+ *   light culling.
+ * 
+ * [!] GALV_BustMenu Changes:
+ * - Fixed bust pictures not appearing when opening the menu.
+ * 
+ * 
  * [!] Place below these plugins or as low as possible:
  * - PrettySleekGauges
  * - YEP_BattleEngineCore
@@ -77,6 +90,8 @@
  * - HIME_EnemyReinforcements
  * - VE_BasicModule
  * - VE_FogAndOverlay
+ * - GALV_BustMenu
+ * - TerraxLighting
  *
  * ------------------------ UPDATES ------------------------------
  *
@@ -168,8 +183,18 @@
  *   when executing the "Change Tileset" map command.
  *   - Fixed bug where event image persists when switching to 
  *     a blank image event page from previous fix
+ *
  * Version 2.1 - 9/02/2026
  * - Fixed pixel gaps during fast map scrolling by rounding sprite/tilemap positions.
+ * 
+ * Version 2.2 - 10/1/2026
+ * - Fixed the "B"(brightness) option of the Light commands in
+ *   "TerraxLighting" having no effect.
+ * - Improved "TerraxLighting" performance: light mask sprite reuse,
+ *   canvas.ellipse() for ovals, cached color checks, off-screen
+ *   light culling.
+ * - Skipped the "VE_FogAndOverlay" fog update loop when no fog exists.
+ * - Fixed bust pictures not appearing when opening the menu.
  */
 
 var TY = TY || {};
@@ -794,6 +819,321 @@ TY.terminaTweaks = TY.terminaTweaks || {};
     Tilemap.prototype.roundPixels = true;
   }
 
+  //===============================================================
+  // TerraxLighting
+  //===============================================================
+
+  (function () {
+    /**
+     * Caches color validation / hex parsing results.
+     * NOTE: The originals re-run these regexes for the same handful of
+     *       colors dozens of times per frame.
+     */
+    var validColors = {};
+    var rgbColors = {};
+    var COLOR_PATTERN = /(^#[0-9A-F]{6}$)|(^#[0-9A-F]{3}$)/i;
+
+    function isValidColor(color) {
+      var valid = validColors[color];
+      if (valid === undefined) {
+        valid = COLOR_PATTERN.test(color);
+        validColors[color] = valid;
+      }
+      return valid;
+    }
+
+    function hexToRgb(hex) {
+      var rgb = rgbColors[hex];
+      if (rgb === undefined) {
+        var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        rgb = result
+          ? {
+              r: parseInt(result[1], 16),
+              g: parseInt(result[2], 16),
+              b: parseInt(result[3], 16),
+            }
+          : null;
+        rgbColors[hex] = rgb;
+      }
+      return rgb;
+    }
+
+    //===============================================================
+    // Spriteset_Map
+    //===============================================================
+
+    /**
+     * Reuses the light mask sprites instead of allocating
+     * and disposing a new one every frame.
+     *
+     * NOTE: The plugin allocates a new sprite for the light mask every
+     *       frame and disposes it on the next one. A one-entry pool is
+     *       used here instead to reduce garbage collection pressure.
+     */
+    var lightmaskPatched = false;
+
+    if (Spriteset_Map.prototype.createLightmask) {
+      var TY_Spriteset_Map_createLightmask =
+        Spriteset_Map.prototype.createLightmask;
+
+      Spriteset_Map.prototype.createLightmask = function () {
+        TY_Spriteset_Map_createLightmask.call(this);
+
+        if (lightmaskPatched || !this._lightmask) return;
+        lightmaskPatched = true;
+
+        var proto = Object.getPrototypeOf(this._lightmask);
+
+        proto._removeSprite = function () {
+          var sprite = this._sprites.pop();
+          if (!sprite) return;
+          this.removeChild(sprite);
+          if (!this._spritePool) this._spritePool = [];
+          this._spritePool.push(sprite);
+        };
+
+        proto._addSprite = function (x1, y1, selectedbitmap) {
+          if (!this._spritePool) this._spritePool = [];
+          var sprite = this._spritePool.pop();
+          if (!sprite) {
+            sprite = new Sprite(this.viewport);
+            sprite.blendMode = 2;
+            sprite.rotation = 0;
+            sprite.ax = 0;
+            sprite.ay = 0;
+          }
+          sprite.bitmap = selectedbitmap;
+          sprite.opacity = 255;
+          sprite.x = x1;
+          sprite.y = y1;
+          this._sprites.push(sprite);
+          this.addChild(sprite);
+        };
+      };
+    }
+
+    //===============================================================
+    // Bitmap
+    //===============================================================
+
+    /**
+     * Replaces the manual ellipse sampling with a single canvas.ellipse() call
+     *
+     * NOTE: The original samples an ellipse with ~2,000 lineTo() calls
+     *       per circle, per frame
+     */
+    Bitmap.prototype.FillCircle = function (
+      centerX,
+      centerY,
+      xradius,
+      yradius,
+      color1,
+    ) {
+      centerX = centerX + 20;
+      var context = this._context;
+      context.save();
+      context.fillStyle = color1;
+      context.beginPath();
+      context.ellipse(centerX, centerY, xradius, yradius, 0, 0, Math.PI * 2);
+      context.fill();
+      context.closePath();
+      context.restore();
+      this._setDirty();
+    };
+
+    /**
+     * Applies several targeted performance fixes to the normal light rendering method.
+     * NOTE: Color validation is cached, lights that are completely
+     *       outside the mask are skipped (the original tested
+     *       "x1 + r2 < 0" twice, so lights above the top edge were
+     *       never culled and always drawn), and the flicker dice are
+     *       only rolled for actual flickering lights
+     */
+    Bitmap.prototype.radialgradientFillRect = function (
+      x1,
+      y1,
+      r1,
+      r2,
+      color1,
+      color2,
+      flicker,
+      brightness,
+      direction,
+    ) {
+      if (!isValidColor(color1)) color1 = "#000000";
+      if (!isValidColor(color2)) color2 = "#000000";
+
+      x1 = x1 + 20;
+
+      var nx1 = Number(x1);
+      var ny1 = Number(y1);
+      var nr2 = Number(r2);
+
+      if (nx1 - nr2 > Graphics.boxWidth) return;
+      if (ny1 - nr2 > Graphics.boxHeight) return;
+      if (nx1 + nr2 < 0) return;
+      if (ny1 + nr2 < 0) return;
+
+      if (!brightness) brightness = 0.0;
+      if (!direction) direction = 0;
+
+      var context = this._context;
+      var grad;
+
+      if (flicker == true) {
+        var wait = Math.floor(Math.random() * 8 + 1);
+        if (wait == 1) {
+          var flickerradiusshift = $gameVariables.GetFireRadius();
+          var flickercolorshift = $gameVariables.GetFireColorshift();
+          var gradrnd = Math.floor(Math.random() * flickerradiusshift + 1);
+          var colorrnd = Math.floor(
+            Math.random() * flickercolorshift - flickercolorshift / 2,
+          );
+
+          var rgb = hexToRgb(color1);
+          if (rgb) {
+            var g = rgb.g + colorrnd;
+            if (g < 0) g = 0;
+            if (g > 255) g = 255;
+            color1 =
+              "#" +
+              ((1 << 24) + (rgb.r << 16) + (g << 8) + rgb.b)
+                .toString(16)
+                .slice(1);
+            r2 = r2 - gradrnd;
+            if (r2 < 0) r2 = 0;
+          }
+        }
+      }
+
+      grad = context.createRadialGradient(x1, y1, r1, x1, y1, r2);
+      if (brightness) {
+        grad.addColorStop(0, "#FFFFFF");
+      }
+      grad.addColorStop(brightness, color1);
+      grad.addColorStop(1, color2);
+
+      context.save();
+      context.fillStyle = grad;
+      direction = Number(direction);
+      var pw = $gameMap.tileWidth() / 2;
+      var ph = $gameMap.tileHeight() / 2;
+      switch (direction) {
+        case 0:
+          context.fillRect(x1 - r2, y1 - r2, r2 * 2, r2 * 2);
+          break;
+        case 1:
+          context.fillRect(x1 - r2, y1 - ph, r2 * 2, r2 * 2);
+          break;
+        case 2:
+          context.fillRect(x1 - r2, y1 - r2, r2 * 1 + pw, r2 * 2);
+          break;
+        case 3:
+          context.fillRect(x1 - r2, y1 - r2, r2 * 2, r2 * 1 + ph);
+          break;
+        case 4:
+          context.fillRect(x1 - pw, y1 - r2, r2 * 2, r2 * 2);
+          break;
+      }
+      context.restore();
+      this._setDirty();
+    };
+
+    //===============================================================
+    // Game_Variables
+    //===============================================================
+
+    /**
+     * BUGFIX: GetPlayerBrightness() used to overwrite the stored
+     *         brightness with 0 every time it was read, so the "B"
+     *         option of the Light commands never had any effect
+     */
+    Game_Variables.prototype.GetPlayerBrightness = function () {
+      return this._Terrax_Lighting_PlayerBrightness || 0.0;
+    };
+  })();
+
+  //===============================================================
+  // VE_FogAndOverlay
+  //===============================================================
+
+  (function () {
+    if (
+      typeof VictorEngine === "undefined" ||
+      !VictorEngine.FogAndOverlay ||
+      !VictorEngine.FogAndOverlay.SpritesetBaseUpdate
+    )
+      return;
+
+    //===============================================================
+    // Spriteset_Base
+    //===============================================================
+
+    /**
+     * Skips the fog update loop entirely while no fog effect exists.
+     */
+    var maxFogs = VictorEngine.Parameters.FogAndOverlay.MaxFogs || 1;
+
+    Spriteset_Base.prototype.update = function () {
+      VictorEngine.FogAndOverlay.SpritesetBaseUpdate.call(this);
+      var fogs = $gameScreen._fogs;
+      var effects = this._fogEffects;
+      if ((fogs && fogs.length > 0) || (effects && effects.length > 0)) {
+        for (var i = 1; i < maxFogs; i++) {
+          this.updateFogs(i);
+        }
+      }
+    };
+  })();
+
+  //===============================================================
+  // Scene_Menu
+  //===============================================================
+
+  /**
+   * BUGFIX: Makes bust pictures visible when the menu opens.
+   * NOTE: Bust pictures are loaded asynchronously,
+   *       the bitmap's canvas can stay blank even after the source
+   *       image has finished loading. Blank bitmaps are re-rasterized
+   *       here, and still-loading bitmaps get a one-shot window
+   *       refresh so they appear as soon as they are ready.
+   *
+   * @alias Scene_Menu.prototype.start
+   */
+  var TY_Scene_Menu_start = Scene_Menu.prototype.start;
+  Scene_Menu.prototype.start = function () {
+    TY_Scene_Menu_start.call(this);
+
+    var win = this._statusWindow;
+    if (!win) return;
+
+    var needsRefresh = false;
+    var members = $gameParty.members();
+
+    for (var i = 0; i < members.length; i++) {
+      var actor = members[i];
+      var bitmap = ImageManager.loadPicture(
+        actor.faceName() + "_" + (actor.faceIndex() + 1),
+      );
+
+      if (bitmap._image && bitmap._image.complete) {
+        if (!bitmap._tyBustRepaired) {
+          bitmap._tyBustRepaired = true;
+          if (bitmap._loadingState !== "decoded") {
+            bitmap._context.drawImage(bitmap._image, 0, 0);
+            bitmap._setDirty();
+            needsRefresh = true;
+          }
+        }
+      } else if (!bitmap._tyBustHooked) {
+        bitmap._tyBustHooked = true;
+        bitmap.addLoadListener(win.refresh.bind(win));
+      }
+    }
+
+    if (needsRefresh) win.refresh();
+  };
+	
 //==========================================================
     // End of File
 //==========================================================
