@@ -1,5 +1,5 @@
 /*:
- * @plugindesc v2.1 - Includes a list of QoL and General changes to the game.
+ * @plugindesc v2.2 - Includes a list of QoL and General changes to the game.
  * @author Toby Yasha, Fokuto, Nemesis, Atlasle, 咸鱼鱼糕
  *
  * @help
@@ -68,7 +68,11 @@
  * [!] VE_BasicModule/VE_FogAndOverlay Changes:
  * - Fixed sprite order in battle being messed up because it was
  *   updated every frame.
- *
+ * 
+ * [!] GALV_BustMenu Changes:
+ * - Fixed bust pictures not appearing when opening the menu.
+ * 
+ * 
  * [!] Place below these plugins or as low as possible:
  * - PrettySleekGauges
  * - YEP_BattleEngineCore
@@ -77,6 +81,7 @@
  * - HIME_EnemyReinforcements
  * - VE_BasicModule
  * - VE_FogAndOverlay
+ * - GALV_BustMenu
  *
  * ------------------------ UPDATES ------------------------------
  *
@@ -168,8 +173,12 @@
  *   when executing the "Change Tileset" map command.
  *   - Fixed bug where event image persists when switching to 
  *     a blank image event page from previous fix
+ *
  * Version 2.1 - 9/02/2026
  * - Fixed pixel gaps during fast map scrolling by rounding sprite/tilemap positions.
+ * 
+ * Version 2.2 - 10/1/2026
+ * - Fixed bust pictures not appearing when opening the menu.
  */
 
 var TY = TY || {};
@@ -739,7 +748,7 @@ TY.terminaTweaks = TY.terminaTweaks || {};
   /**
    * BUGFIX: Prevents 1-2px seams between adjacent event sprites during fast scrolling.
    * NOTE: Floating-point positions cause sub-pixel rendering. Rounding to
-   *       whole pixels fixes the gaps without affecting gameplay.
+   *       whole pixels fixes the gaps.
    */
   var TY_Sprite_Character_updatePosition =
     Sprite_Character.prototype.updatePosition;
@@ -793,6 +802,55 @@ TY.terminaTweaks = TY.terminaTweaks || {};
     };
     Tilemap.prototype.roundPixels = true;
   }
+
+  //===============================================================
+  // Scene_Menu
+  //===============================================================
+
+  /**
+   * BUGFIX: Makes bust pictures visible when the menu opens.
+   * NOTE: Bust pictures are loaded asynchronously,
+   *       the bitmap's canvas can stay blank even after the source
+   *       image has finished loading. Blank bitmaps are re-rasterized
+   *       here, and still-loading bitmaps get a one-shot window
+   *       refresh so they appear as soon as they are ready.
+   *
+   * @alias Scene_Menu.prototype.start
+   */
+  var TY_Scene_Menu_start = Scene_Menu.prototype.start;
+  Scene_Menu.prototype.start = function () {
+    TY_Scene_Menu_start.call(this);
+
+    var win = this._statusWindow;
+    if (!win) return;
+
+    var needsRefresh = false;
+    var members = $gameParty.members();
+
+    for (var i = 0; i < members.length; i++) {
+      var actor = members[i];
+      var bitmap = ImageManager.loadPicture(
+        actor.faceName() + "_" + (actor.faceIndex() + 1),
+      );
+
+      if (bitmap._image && bitmap._image.complete) {
+        if (!bitmap._tyBustRepaired) {
+          bitmap._tyBustRepaired = true;
+          if (bitmap._loadingState !== "decoded") {
+            bitmap._context.drawImage(bitmap._image, 0, 0);
+            bitmap._setDirty();
+            needsRefresh = true;
+          }
+        }
+      } else if (!bitmap._tyBustHooked) {
+        bitmap._tyBustHooked = true;
+        bitmap.addLoadListener(win.refresh.bind(win));
+      }
+    }
+
+    if (needsRefresh) win.refresh();
+  };
+
 
 //==========================================================
     // End of File
